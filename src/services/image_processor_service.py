@@ -15,7 +15,7 @@ from ..config import (
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model
 )
 from ..processors.image_processor import ImageProcessor
-from ..token_tracker import TokenTracker
+from ..tracking.token_tracker import TokenTracker
 
 
 class ImageProcessorService:
