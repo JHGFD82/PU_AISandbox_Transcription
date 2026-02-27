@@ -87,7 +87,37 @@ to read reliably, they may be omitted"""
         return f"""Transcribe all legibly visible text from this image exactly as it appears. Do not translate.
 
 This image primarily contains {target_language} text."""
-    
+    def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
+                      user_prompt: str, data_url: str) -> Any:
+        """Call the OCR API, using the correct token-limit parameter for the model."""
+        messages: list[dict[str, Any]] = [
+            {"role": system_role, "content": system_prompt},
+            {"role": "user", "content": [
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {"url": data_url}}
+            ]},
+        ]
+        if model_uses_max_completion_tokens(model):
+            return self.client.chat.completions.create( # type: ignore[misc]
+                model=model,
+                temperature=OCR_TEMPERATURE,
+                max_completion_tokens=OCR_MAX_TOKENS,
+                top_p=OCR_TOP_P,
+                frequency_penalty=OCR_FREQUENCY_PENALTY,
+                presence_penalty=OCR_PRESENCE_PENALTY,
+                stream=False,
+                messages=messages,
+            )
+        return self.client.chat.completions.create( # type: ignore[misc]
+            model=model,
+            temperature=OCR_TEMPERATURE,
+            max_tokens=OCR_MAX_TOKENS,
+            top_p=OCR_TOP_P,
+            frequency_penalty=OCR_FREQUENCY_PENALTY,
+            presence_penalty=OCR_PRESENCE_PENALTY,
+            stream=False,
+            messages=messages,
+        )    
     def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console") -> str:
         """Perform OCR on an image file using the specified model with retry logic."""
         model = self._get_model()
@@ -122,28 +152,8 @@ This image primarily contains {target_language} text."""
                     time.sleep(delay)
                 
                 system_role = get_model_system_role(model)
-                tokens_kwarg: dict[str, Any] = (
-                    {"max_completion_tokens": OCR_MAX_TOKENS}
-                    if model_uses_max_completion_tokens(model)
-                    else {"max_tokens": OCR_MAX_TOKENS}
-                )
                 logging.info(f'Making OCR API call to model: {model} (system role: {system_role})')
-                response = self.client.chat.completions.create( # type: ignore[misc]
-                    model=model,
-                    temperature=OCR_TEMPERATURE,
-                    **tokens_kwarg,  # type: ignore[arg-type]
-                    top_p=OCR_TOP_P,
-                    frequency_penalty=OCR_FREQUENCY_PENALTY,
-                    presence_penalty=OCR_PRESENCE_PENALTY,
-                    stream=False,
-                    messages=[
-                        {"role": system_role, "content": system_prompt},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": user_prompt},
-                            {"type": "image_url", "image_url": {"url": data_url}}
-                        ]},
-                    ]
-                )
+                response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url)
 
                 assert not isinstance(response, ABCIterator), "Unexpected stream response received."
                 
