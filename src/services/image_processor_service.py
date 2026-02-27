@@ -4,7 +4,7 @@ Image processing service for OCR operations using the Princeton AI Sandbox.
 
 import logging
 import time
-from typing import Optional
+from typing import Optional, Any
 from collections.abc import Iterator as ABCIterator
 
 from portkey_ai import Portkey
@@ -122,7 +122,7 @@ This image primarily contains {target_language} text."""
                     time.sleep(delay)
                 
                 system_role = get_model_system_role(model)
-                tokens_kwarg = (
+                tokens_kwarg: dict[str, Any] = (
                     {"max_completion_tokens": OCR_MAX_TOKENS}
                     if model_uses_max_completion_tokens(model)
                     else {"max_tokens": OCR_MAX_TOKENS}
@@ -131,7 +131,7 @@ This image primarily contains {target_language} text."""
                 response = self.client.chat.completions.create( # type: ignore[misc]
                     model=model,
                     temperature=OCR_TEMPERATURE,
-                    **tokens_kwarg,
+                    **tokens_kwarg,  # type: ignore[arg-type]
                     top_p=OCR_TOP_P,
                     frequency_penalty=OCR_FREQUENCY_PENALTY,
                     presence_penalty=OCR_PRESENCE_PENALTY,
