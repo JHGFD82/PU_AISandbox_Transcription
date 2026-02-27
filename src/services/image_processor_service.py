@@ -12,7 +12,8 @@ from portkey_ai import Portkey
 from ..config import (
     DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
-    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model
+    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model,
+    get_model_system_role
 )
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
@@ -120,7 +121,8 @@ This image primarily contains {target_language} text."""
                     logging.info(f'Retrying API call (attempt {attempt + 1}/{max_retries}) after {delay:.1f}s delay...')
                     time.sleep(delay)
                 
-                logging.info(f'Making OCR API call to model: {model}')
+                system_role = get_model_system_role(model)
+                logging.info(f'Making OCR API call to model: {model} (system role: {system_role})')
                 response = self.client.chat.completions.create( # type: ignore[misc]
                     model=model,
                     temperature=OCR_TEMPERATURE,
@@ -130,7 +132,7 @@ This image primarily contains {target_language} text."""
                     presence_penalty=OCR_PRESENCE_PENALTY,
                     stream=False,
                     messages=[
-                        {"role": "system", "content": system_prompt},
+                        {"role": system_role, "content": system_prompt},
                         {"role": "user", "content": [
                             {"type": "text", "text": user_prompt},
                             {"type": "image_url", "image_url": {"url": data_url}}
@@ -174,10 +176,12 @@ This image primarily contains {target_language} text."""
                     return ""
                     
             except Exception as e:
-                # Check for content filter (error code 400 or message contains 'content_filter')
                 error_str = str(e).lower()
+                # Only retry on genuine content filter responses, not generic 400 bad request errors.
+                # A content filter 400 contains specific keywords; a malformed request 400 does not.
+                is_content_filter = 'content_filter' in error_str or 'jailbreak' in error_str
                 
-                if ('content_filter' in error_str or '400' in error_str or 'filter' in error_str):
+                if is_content_filter:
                     if attempt < max_retries - 1:
                         logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
                         continue
@@ -185,8 +189,8 @@ This image primarily contains {target_language} text."""
                         logging.error(f'Content filter triggered on final attempt. Giving up.')
                         raise
                 else:
-                    # For non-content-filter errors, fail immediately
-                    logging.error(f'API error (non-filter): {e}')
+                    # For all other errors (including 400 bad request), fail immediately.
+                    logging.error(f'API error: {e}')
                     raise
         
         logging.error('Failed to get OCR response after all retries.')
