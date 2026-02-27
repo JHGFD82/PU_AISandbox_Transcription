@@ -193,11 +193,21 @@ This image primarily contains {target_language} text."""
                 
                 if response.choices and len(response.choices) > 0 and response.choices[0].message:
                     content = response.choices[0].message.content
-                    if content is not None and isinstance(content, str):
-                        return content
+                    if content is None:
+                        # Some models (e.g. reasoning models) may not populate content the same way.
+                        # Log the raw message for diagnosis and retry.
+                        logging.warning(f'Response content is None. Raw message: {response.choices[0].message}')
+                        continue
+                    if not isinstance(content, str):
+                        logging.warning(f'Unexpected content type {type(content)}: {content!r}. Retrying...')
+                        continue
+                    if not content.strip():
+                        logging.warning(f'Response returned empty content (attempt {attempt + 1}/{max_retries}). Retrying...')
+                        continue
+                    return content
                 else:
-                    logging.warning('No content in API response.')
-                    return ""
+                    logging.warning('No choices in API response. Retrying...')
+                    continue
                     
             except Exception as e:
                 error_str = str(e).lower()
@@ -217,5 +227,5 @@ This image primarily contains {target_language} text."""
                     logging.error(f'API error: {e}')
                     raise
         
-        logging.error('Failed to get OCR response after all retries.')
-        raise RuntimeError("Failed to process image after maximum retries")
+        logging.error('Failed to get non-empty OCR content after all retries.')
+        raise RuntimeError("OCR returned no content after maximum retries — check model response format in debug logs")
