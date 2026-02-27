@@ -13,7 +13,7 @@ from ..config import (
     DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model,
-    get_model_system_role, model_uses_max_completion_tokens
+    get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters
 )
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
@@ -97,7 +97,16 @@ This image primarily contains {target_language} text."""
                 {"type": "image_url", "image_url": {"url": data_url}}
             ]},
         ]
-        if model_uses_max_completion_tokens(model):
+        use_completion_tokens = model_uses_max_completion_tokens(model)
+        fixed_params = model_has_fixed_parameters(model)
+        if use_completion_tokens and fixed_params:
+            return self.client.chat.completions.create( # type: ignore[misc]
+                model=model,
+                max_completion_tokens=OCR_MAX_TOKENS,
+                stream=False,
+                messages=messages,
+            )
+        if use_completion_tokens:
             return self.client.chat.completions.create( # type: ignore[misc]
                 model=model,
                 temperature=OCR_TEMPERATURE,
