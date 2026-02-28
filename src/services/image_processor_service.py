@@ -13,7 +13,8 @@ from ..config import (
     DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model,
-    get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters
+    get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
+    get_model_max_completion_tokens,
 )
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
@@ -88,7 +89,7 @@ to read reliably, they may be omitted"""
 
 This image primarily contains {target_language} text."""
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
-                      user_prompt: str, data_url: str) -> Any:
+                      user_prompt: str, data_url: str, max_tokens: int) -> Any:
         """Call the OCR API, using the correct token-limit parameter for the model."""
         messages: list[dict[str, Any]] = [
             {"role": system_role, "content": system_prompt},
@@ -102,7 +103,7 @@ This image primarily contains {target_language} text."""
         if use_completion_tokens and fixed_params:
             return self.client.chat.completions.create( # type: ignore[misc]
                 model=model,
-                max_completion_tokens=OCR_MAX_TOKENS,
+                max_completion_tokens=max_tokens,
                 stream=False,
                 messages=messages,
             )
@@ -110,7 +111,7 @@ This image primarily contains {target_language} text."""
             return self.client.chat.completions.create( # type: ignore[misc]
                 model=model,
                 temperature=OCR_TEMPERATURE,
-                max_completion_tokens=OCR_MAX_TOKENS,
+                max_completion_tokens=max_tokens,
                 top_p=OCR_TOP_P,
                 frequency_penalty=OCR_FREQUENCY_PENALTY,
                 presence_penalty=OCR_PRESENCE_PENALTY,
@@ -120,7 +121,7 @@ This image primarily contains {target_language} text."""
         return self.client.chat.completions.create( # type: ignore[misc]
             model=model,
             temperature=OCR_TEMPERATURE,
-            max_tokens=OCR_MAX_TOKENS,
+            max_tokens=max_tokens,
             top_p=OCR_TOP_P,
             frequency_penalty=OCR_FREQUENCY_PENALTY,
             presence_penalty=OCR_PRESENCE_PENALTY,
@@ -161,8 +162,9 @@ This image primarily contains {target_language} text."""
                     time.sleep(delay)
                 
                 system_role = get_model_system_role(model)
-                logging.info(f'Making OCR API call to model: {model} (system role: {system_role})')
-                response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url)
+                max_tokens = get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
+                logging.info(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
+                response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url, max_tokens)
 
                 assert not isinstance(response, ABCIterator), "Unexpected stream response received."
                 
