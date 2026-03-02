@@ -10,12 +10,21 @@ from collections.abc import Iterator as ABCIterator
 from portkey_ai import Portkey
 
 from ..config import (
-    DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
-    OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
-    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model,
+    DEFAULT_MODEL, model_supports_vision, get_vision_capable_models, resolve_model,
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
     get_model_max_completion_tokens,
 )
+from .constants import MAX_RETRIES, BASE_RETRY_DELAY
+
+# OCR model preference
+OCR_MODEL: str = "gpt-4o"
+
+# OCR API parameters (conservative to reduce hallucination)
+OCR_TEMPERATURE: float = 0.0   # Deterministic output
+OCR_MAX_TOKENS: int = 4000
+OCR_TOP_P: float = 0.1         # Very low to prevent creativity
+OCR_FREQUENCY_PENALTY: float = 0.5  # Penalize repetition of tokens
+OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 
