@@ -28,6 +28,39 @@ OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 
+# Per-language script guidance injected into OCR prompts
+_SCRIPT_GUIDANCE: dict[str, str] = {
+    'Chinese': (
+        "The text uses Chinese characters (hanzi/漢字). "
+        "Transcribe each character exactly as it appears."
+    ),
+    'Simplified Chinese': (
+        "The text uses Simplified Chinese characters (简体字). "
+        "Transcribe each character exactly in its simplified form — "
+        "do NOT convert to or substitute traditional variants."
+    ),
+    'Traditional Chinese': (
+        "The text uses Traditional Chinese characters (繁體字). "
+        "Transcribe each character exactly in its traditional form — "
+        "do NOT convert to or substitute simplified variants."
+    ),
+    'Japanese': (
+        "The text uses Japanese script, which combines kanji (Chinese-derived characters), "
+        "hiragana, katakana, and possibly rōmaji. "
+        "Reproduce all scripts exactly as written. "
+        "Some kanji may be Japanese-specific forms (kokuji) not found in standard Chinese — "
+        "transcribe them faithfully and do NOT substitute simplified or traditional Chinese variants. "
+        "Hiragana printed at very small sizes may be omitted only if completely illegible."
+    ),
+    'Korean': (
+        "The text uses Korean script (hangul/한글), possibly mixed with hanja (漢字) or Latin text. "
+        "Transcribe all scripts exactly as they appear."
+    ),
+    'English': (
+        "The text uses the Latin alphabet."
+    ),
+}
+
 
 class ImageProcessorService:
     """Handles OCR operations using PortKey API."""
@@ -75,12 +108,14 @@ class ImageProcessorService:
     
     def _build_system_prompt(self, target_language: str) -> str:
         """Build the system prompt for OCR operations."""
+        script_note = _SCRIPT_GUIDANCE.get(target_language, "")
+        script_section = f"\nSCRIPT NOTES:\n{script_note}\n" if script_note else ""
         return f"""You are an expert OCR assistant specializing in text extraction from images containing \
 Chinese, Japanese, Korean, and English.
 
 Your task is to transcribe all legibly visible text from the image exactly as it appears, preserving layout, \
 orientation (horizontal or vertical), and structure as closely as possible.
-
+{script_section}
 RULES:
 - Extract ONLY text that is actually visible in the image — do NOT add, invent, or hallucinate any content
 - Do NOT repeat text unless it genuinely appears multiple times in the image
@@ -88,15 +123,11 @@ RULES:
 - Do NOT add commentary, analysis, disclaimers, or assumptions
 - Preserve original formatting, line breaks, numbering, symbols, and special characters
 - If text is partially obscured or unclear, extract what you can; note any unreadable sections with a \
-single brief line at the end (e.g., "[Some text unclear due to image quality]")
-- Hiragana is often printed at very small sizes in these images; if hiragana characters are too small \
-to read reliably, they may be omitted"""
+single brief line at the end (e.g., "[Some text unclear due to image quality]")"""
 
     def _build_user_prompt(self, target_language: str) -> str:
         """Build the user prompt template for OCR."""
-        return f"""Transcribe all legibly visible text from this image exactly as it appears. Do not translate.
-
-This image primarily contains {target_language} text."""
+        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}. Do not translate."""
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
                       user_prompt: str, data_url: str, max_tokens: int) -> Any:
         """Call the OCR API, using the correct token-limit parameter for the model."""
