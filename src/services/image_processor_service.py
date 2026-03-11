@@ -100,22 +100,28 @@ class ImageProcessorService:
 
         return model
     
-    def _create_ocr_prompt(self, target_language: str) -> tuple[str, str]:
+    def _create_ocr_prompt(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
         """Create system and user prompt templates for OCR."""
-        system_prompt = self._build_system_prompt(target_language)
-        user_prompt = self._build_user_prompt(target_language)
+        system_prompt = self._build_system_prompt(target_language, vertical=vertical)
+        user_prompt = self._build_user_prompt(target_language, vertical=vertical)
         return system_prompt, user_prompt
     
-    def _build_system_prompt(self, target_language: str) -> str:
+    def _build_system_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the system prompt for OCR operations."""
         script_note = _SCRIPT_GUIDANCE.get(target_language, "")
         script_section = f"\nSCRIPT NOTES:\n{script_note}\n" if script_note else ""
+        vertical_section = (
+            "\nTEXT ORIENTATION:\n"
+            "The majority of text in this image is vertical — written top-to-bottom, "
+            "with columns ordered right-to-left. Read and transcribe each column from top to bottom, "
+            "proceeding from the rightmost column to the leftmost.\n"
+        ) if vertical else ""
         return f"""You are an expert OCR assistant specializing in text extraction from images containing \
 Chinese, Japanese, Korean, and English.
 
 Your task is to transcribe all legibly visible text from the image exactly as it appears, preserving layout, \
 orientation (horizontal or vertical), and structure as closely as possible.
-{script_section}
+{script_section}{vertical_section}
 RULES:
 - Extract ONLY text that is actually visible in the image — do NOT add, invent, or hallucinate any content
 - Do NOT repeat text unless it genuinely appears multiple times in the image
@@ -125,9 +131,10 @@ RULES:
 - If text is partially obscured or unclear, extract what you can; note any unreadable sections with a \
 single brief line at the end (e.g., "[Some text unclear due to image quality]")"""
 
-    def _build_user_prompt(self, target_language: str) -> str:
+    def _build_user_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the user prompt template for OCR."""
-        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}. Do not translate."""
+        vertical_note = " The text is predominantly vertical (top-to-bottom, right-to-left columns)." if vertical else ""
+        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}.{vertical_note} Do not translate."""
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
                       user_prompt: str, data_url: str, max_tokens: int) -> Any:
         """Call the OCR API, using the correct token-limit parameter for the model."""
@@ -168,7 +175,7 @@ single brief line at the end (e.g., "[Some text unclear due to image quality]")"
             stream=False,
             messages=messages,
         )    
-    def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console") -> str:
+    def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console", vertical: bool = False) -> str:
         """Perform OCR on an image file using the specified model with retry logic."""
         model = self._get_model()
         
@@ -180,7 +187,7 @@ single brief line at the end (e.g., "[Some text unclear due to image quality]")"
                 f"Please use one of the following vision-capable models: {vision_models}"
             )
         
-        system_prompt, user_prompt = self._create_ocr_prompt(target_language)
+        system_prompt, user_prompt = self._create_ocr_prompt(target_language, vertical=vertical)
         
         # Convert image to data URL
         try:
