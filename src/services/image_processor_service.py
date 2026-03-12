@@ -133,8 +133,23 @@ single brief line at the end (e.g., "[Some text unclear due to image quality]")"
 
     def _build_user_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the user prompt template for OCR."""
-        vertical_note = " The text is predominantly vertical (top-to-bottom, right-to-left columns)." if vertical else ""
-        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}.{vertical_note} Do not translate."""
+        script_note = _SCRIPT_GUIDANCE.get(target_language, "")
+        script_reinforcement = f"\nSCRIPT REMINDER: {script_note}" if script_note else ""
+        vertical_reinforcement = (
+            "\nORIENTATION REMINDER: Text is vertical — transcribe each column top-to-bottom, "
+            "proceeding right-to-left across columns."
+        ) if vertical else ""
+        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}.
+{script_reinforcement}{vertical_reinforcement}
+
+CRITICAL RULES FOR THIS IMAGE:
+- Output ONLY text that is genuinely visible — do NOT invent, fill in, or hallucinate any characters or words
+- Do NOT translate — preserve the original script and language exactly as shown, even in mixed-language content
+- Include ALL text elements: body text, headings, captions, page numbers, table contents, labels, and marginalia
+- Preserve line breaks, paragraph spacing, and structural layout as faithfully as plain text allows
+- Reproduce punctuation, symbols, and special characters exactly as they appear
+- If a section of text is partially obscured or too degraded to read, extract what you can and note the gap with a single brief marker (e.g., "[text unclear]") — do not skip the surrounding legible text
+- Do not add commentary, disclaimers, or explanatory notes outside of the above illegibility marker"""
 
     def build_prompts(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
         """Return (system_prompt, user_prompt) without calling the API.
