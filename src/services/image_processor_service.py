@@ -135,6 +135,14 @@ single brief line at the end (e.g., "[Some text unclear due to image quality]")"
         """Build the user prompt template for OCR."""
         vertical_note = " The text is predominantly vertical (top-to-bottom, right-to-left columns)." if vertical else ""
         return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}.{vertical_note} Do not translate."""
+
+    def build_prompts(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
+        """Return (system_prompt, user_prompt) without calling the API.
+
+        Used by --dry-run mode to preview what would be sent to the model.
+        """
+        return self._create_ocr_prompt(target_language, vertical=vertical)
+
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
                       user_prompt: str, data_url: str, max_tokens: int) -> Any:
         """Call the OCR API, using the correct token-limit parameter for the model."""
