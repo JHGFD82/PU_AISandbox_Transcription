@@ -12,7 +12,7 @@ from portkey_ai import Portkey
 from ..config import (
     DEFAULT_MODEL, model_supports_vision, get_vision_capable_models, resolve_model,
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
-    get_model_max_completion_tokens,
+    get_model_max_completion_tokens, maybe_sync_model_pricing,
 )
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY
 
@@ -92,6 +92,7 @@ class ImageProcessorService:
             prefer_model=OCR_MODEL,
             require_vision=True,
         )
+        maybe_sync_model_pricing(model)
 
         if not self.custom_model and model == DEFAULT_MODEL and OCR_MODEL != DEFAULT_MODEL:
             logging.warning(f"OCR model {OCR_MODEL} not available. Using {DEFAULT_MODEL} instead.")
