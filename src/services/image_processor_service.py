@@ -14,7 +14,9 @@ from ..models import (
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
     get_model_max_completion_tokens, maybe_sync_model_pricing,
 )
-from .constants import MAX_RETRIES, BASE_RETRY_DELAY
+from ..processors.image_processor import ImageProcessor
+from ..tracking.token_tracker import TokenTracker
+from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
 
 # OCR model preference
 OCR_MODEL: str = "gpt-4o"
@@ -25,41 +27,7 @@ OCR_MAX_TOKENS: int = 4000
 OCR_TOP_P: float = 0.1         # Very low to prevent creativity
 OCR_FREQUENCY_PENALTY: float = 0.5  # Penalize repetition of tokens
 OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
-from ..processors.image_processor import ImageProcessor
-from ..tracking.token_tracker import TokenTracker
 
-# Per-language script guidance injected into OCR prompts
-_SCRIPT_GUIDANCE: dict[str, str] = {
-    'Chinese': (
-        "The text uses Chinese characters (hanzi/漢字). "
-        "Transcribe each character exactly as it appears."
-    ),
-    'Simplified Chinese': (
-        "The text uses Simplified Chinese characters (简体字). "
-        "Transcribe each character exactly in its simplified form — "
-        "do NOT convert to or substitute traditional variants."
-    ),
-    'Traditional Chinese': (
-        "The text uses Traditional Chinese characters (繁體字). "
-        "Transcribe each character exactly in its traditional form — "
-        "do NOT convert to or substitute simplified variants."
-    ),
-    'Japanese': (
-        "The text uses Japanese script, which combines kanji (Chinese-derived characters), "
-        "hiragana, katakana, and possibly rōmaji. "
-        "Reproduce all scripts exactly as written. "
-        "Some kanji may be Japanese-specific forms (kokuji) not found in standard Chinese — "
-        "transcribe them faithfully and do NOT substitute simplified or traditional Chinese variants. "
-        "Hiragana printed at very small sizes may be omitted only if completely illegible."
-    ),
-    'Korean': (
-        "The text uses Korean script (hangul/한글), possibly mixed with hanja (漢字) or Latin text. "
-        "Transcribe all scripts exactly as they appear."
-    ),
-    'English': (
-        "The text uses the Latin alphabet."
-    ),
-}
 
 
 class ImageProcessorService:
@@ -109,7 +77,7 @@ class ImageProcessorService:
     
     def _build_system_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the system prompt for OCR operations."""
-        script_note = _SCRIPT_GUIDANCE.get(target_language, "")
+        script_note = OCR_SCRIPT_GUIDANCE.get(target_language, "")
         script_section = f"\nSCRIPT NOTES:\n{script_note}\n" if script_note else ""
         vertical_section = (
             "\nTEXT ORIENTATION:\n"
@@ -134,7 +102,7 @@ single brief line at the end (e.g., "[Some text unclear due to image quality]")"
 
     def _build_user_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the user prompt template for OCR."""
-        script_note = _SCRIPT_GUIDANCE.get(target_language, "")
+        script_note = OCR_SCRIPT_GUIDANCE.get(target_language, "")
         script_reinforcement = f"\nSCRIPT REMINDER: {script_note}" if script_note else ""
         vertical_reinforcement = (
             "\nORIENTATION REMINDER: Text is vertical — transcribe each column top-to-bottom, "
