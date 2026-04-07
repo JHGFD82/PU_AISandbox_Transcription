@@ -52,6 +52,9 @@ class ImageProcessorService:
         self.image_processor = ImageProcessor()
         # Use provided token tracker or create new one
         self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor or "", data_file=token_tracker_file)
+        # Ad-hoc notes appended to prompts at runtime (set via --notes flag)
+        self.system_note: Optional[str] = None
+        self.user_note: Optional[str] = None
     
     def _get_model(self) -> str:
         """Get the model to use for OCR, preferring custom model if specified and supports vision."""
@@ -73,6 +76,11 @@ class ImageProcessorService:
         """Create system and user prompt templates for OCR."""
         system_prompt = self._build_system_prompt(target_language, vertical=vertical)
         user_prompt = self._build_user_prompt(target_language, vertical=vertical)
+
+        if self.system_note:
+            system_prompt += f"\n\nADDITIONAL INSTRUCTIONS:\n{self.system_note}"
+        if self.user_note:
+            user_prompt += f"\n\nADDITIONAL NOTES:\n{self.user_note}"
         return system_prompt, user_prompt
     
     def _build_system_prompt(self, target_language: str, vertical: bool = False) -> str:
