@@ -8,16 +8,13 @@ from collections.abc import Iterator as ABCIterator
 from portkey_ai import Portkey
 
 from ..models import (
-    DEFAULT_MODEL, model_supports_vision, get_vision_capable_models, resolve_model,
+    model_supports_vision, get_vision_capable_models, resolve_model,
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
-    get_model_max_completion_tokens, maybe_sync_model_pricing,
+    get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
-
-# OCR model preference
-OCR_MODEL: str = "gpt-4o"
 
 # OCR API parameters (conservative to reduce hallucination)
 OCR_TEMPERATURE: float = 0.0   # Deterministic output
@@ -56,18 +53,15 @@ class ImageProcessorService:
     
     def _get_model(self) -> str:
         """Get the model to use for OCR, preferring custom model if specified and supports vision."""
+        ocr_default = get_default_model("ocr")
         model = resolve_model(
             requested_model=self.custom_model,
-            prefer_model=OCR_MODEL,
+            prefer_model=ocr_default,
             require_vision=True,
         )
         maybe_sync_model_pricing(model)
-
-        if not self.custom_model and model == DEFAULT_MODEL and OCR_MODEL != DEFAULT_MODEL:
-            logging.warning(f"OCR model {OCR_MODEL} not available. Using {DEFAULT_MODEL} instead.")
-        elif not self.custom_model and model not in (OCR_MODEL, DEFAULT_MODEL):
-            logging.warning(f"Neither OCR model {OCR_MODEL} nor default {DEFAULT_MODEL} available. Using {model} instead.")
-
+        if not self.custom_model and model != ocr_default:
+            logging.warning(f"OCR default model '{ocr_default}' not available; using '{model}' instead.")
         return model
     
     def _create_ocr_prompt(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
