@@ -1,6 +1,4 @@
-"""
-Image processing service for OCR operations using the Princeton AI Sandbox.
-"""
+"""Image processing service for OCR operations using the Princeton AI Sandbox."""
 
 import logging
 import time
