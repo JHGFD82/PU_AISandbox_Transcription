@@ -12,7 +12,7 @@ from ..models import (
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
-from .api_errors import is_content_filter_error, handle_api_errors
+from .api_errors import APISignal, classify_api_error
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
@@ -252,20 +252,13 @@ CRITICAL RULES FOR THIS IMAGE:
                     continue
                     
             except Exception as e:
-                # Only retry on genuine content filter responses, not generic 400 bad request errors.
-                # A content filter 400 contains specific keywords; a malformed request 400 does not.
-                handle_api_errors(e, model)
-                if is_content_filter_error(e):
-                    if attempt < max_retries - 1:
-                        logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
-                        continue
-                    else:
-                        logging.error(f'Content filter triggered on final attempt. Giving up.')
-                        raise
-                else:
-                    # For all other errors (including 400 bad request), fail immediately.
-                    logging.error(f'API error: {e}')
-                    raise
+                signal = classify_api_error(e, model)
+                if signal == APISignal.CONTENT_FILTER and attempt < max_retries - 1:
+                    logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
+                    continue
+                # Either CONTEXT_LENGTH_EXCEEDED or final content-filter attempt — fail immediately.
+                logging.error(f'API error: {e}')
+                raise
         
         logging.error('Failed to get non-empty OCR content after all retries.')
         raise RuntimeError("OCR returned no content after maximum retries — check model response format in debug logs")
