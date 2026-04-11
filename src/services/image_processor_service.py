@@ -11,8 +11,8 @@ from ..models import (
     model_supports_vision, get_vision_capable_models, resolve_model,
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
-    is_model_access_error, remove_model_from_catalog,
 )
+from .api_errors import is_content_filter_error, raise_for_model_access_error
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
@@ -252,21 +252,10 @@ CRITICAL RULES FOR THIS IMAGE:
                     continue
                     
             except Exception as e:
-                error_str = str(e).lower()
                 # Only retry on genuine content filter responses, not generic 400 bad request errors.
                 # A content filter 400 contains specific keywords; a malformed request 400 does not.
-                is_content_filter = 'content_filter' in error_str or 'jailbreak' in error_str
-                
-                if is_model_access_error(str(e)):
-                    removed = remove_model_from_catalog(model)
-                    removed_note = f" It has been removed from the catalog." if removed else ""
-                    logging.error(f'Model access denied for {model!r}: {e}')
-                    raise ValueError(
-                        f"Model '{model}' is not accessible in the Princeton AI Sandbox — "
-                        f"you do not have access to this model.{removed_note} "
-                        "Please use a different model or contact your sandbox administrator."
-                    ) from e
-                elif is_content_filter:
+                raise_for_model_access_error(e, model)
+                if is_content_filter_error(e):
                     if attempt < max_retries - 1:
                         logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
                         continue
