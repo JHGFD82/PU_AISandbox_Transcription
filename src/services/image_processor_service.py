@@ -1,7 +1,6 @@
 """Image processing service for OCR operations using the Princeton AI Sandbox."""
 
 import logging
-import time
 from typing import Optional, Any
 
 from ..models import (
@@ -9,11 +8,10 @@ from ..models import (
     get_model_system_role,
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
-from .api_errors import APISignal, classify_api_error
 from .base_service import BaseService
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
-from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
+from .constants import MAX_RETRIES, OCR_SCRIPT_GUIDANCE
 
 # OCR API parameters (conservative to reduce hallucination)
 OCR_TEMPERATURE: float = 0.0   # Deterministic output
@@ -144,50 +142,29 @@ CRITICAL RULES FOR THIS IMAGE:
             logging.error(f"Failed to process image {file_path}: {e}")
             raise
         
-        # Retry logic for content filter issues
-        max_retries = MAX_RETRIES
-        base_delay = BASE_RETRY_DELAY
-        
-        for attempt in range(max_retries):
-            try:
-                if attempt > 0:
-                    # Exponential backoff with jitter
-                    delay = base_delay * (2 ** attempt) + (0.1 * attempt)
-                    logging.info(f'Retrying API call (attempt {attempt + 1}/{max_retries}) after {delay:.1f}s delay...')
-                    time.sleep(delay)
-                
-                system_role = get_model_system_role(model)
-                max_tokens = get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
-                logging.info(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
-                response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url, max_tokens)
-                self._record_response_usage(response, model, critical=True)
+        system_role = get_model_system_role(model)
+        max_tokens = get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
 
-                if response.choices and len(response.choices) > 0 and response.choices[0].message:
-                    content = response.choices[0].message.content
-                    if content is None:
-                        # Some models (e.g. reasoning models) may not populate content the same way.
-                        # Log the raw message for diagnosis and retry.
-                        logging.warning(f'Response content is None. Raw message: {response.choices[0].message}')
-                        continue
-                    if not isinstance(content, str):
-                        logging.warning(f'Unexpected content type {type(content)}: {content!r}. Retrying...')
-                        continue
-                    if not content.strip():
-                        logging.warning(f'Response returned empty content (attempt {attempt + 1}/{max_retries}). Retrying...')
-                        continue
-                    return content
-                else:
-                    logging.warning('No choices in API response. Retrying...')
-                    continue
-                    
-            except Exception as e:
-                signal = classify_api_error(e, model)
-                if signal == APISignal.CONTENT_FILTER and attempt < max_retries - 1:
-                    logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
-                    continue
-                # Either CONTEXT_LENGTH_EXCEEDED or final content-filter attempt — fail immediately.
-                logging.error(f'API error: {e}')
-                raise
-        
-        logging.error('Failed to get non-empty OCR content after all retries.')
-        raise RuntimeError("OCR returned no content after maximum retries — check model response format in debug logs")
+        def body(attempt: int) -> Any:
+            logging.info(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
+            response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url, max_tokens)
+            self._record_response_usage(response, model, critical=True)
+            if response.choices and len(response.choices) > 0 and response.choices[0].message:
+                content = response.choices[0].message.content
+                if content is None:
+                    logging.warning(f'Response content is None. Raw message: {response.choices[0].message}')
+                    return None
+                if not isinstance(content, str):
+                    logging.warning(f'Unexpected content type {type(content)}: {content!r}. Retrying...')
+                    return None
+                if not content.strip():
+                    logging.warning(f'Response returned empty content (attempt {attempt + 1}/{MAX_RETRIES}). Retrying...')
+                    return None
+                return content
+            logging.warning('No choices in API response. Retrying...')
+            return None
+
+        return self._run_with_retry(
+            body, model, "OCR",
+            timeout_msg="OCR returned no content after maximum retries — check model response format in debug logs",
+        )
