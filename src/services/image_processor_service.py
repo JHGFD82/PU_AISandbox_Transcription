@@ -12,7 +12,7 @@ from ..models import (
     get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
-from .api_errors import is_content_filter_error, raise_for_model_access_error
+from .api_errors import is_content_filter_error, handle_common_api_errors
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
@@ -254,7 +254,7 @@ CRITICAL RULES FOR THIS IMAGE:
             except Exception as e:
                 # Only retry on genuine content filter responses, not generic 400 bad request errors.
                 # A content filter 400 contains specific keywords; a malformed request 400 does not.
-                raise_for_model_access_error(e, model)
+                handle_common_api_errors(e, model)
                 if is_content_filter_error(e):
                     if attempt < max_retries - 1:
                         logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
