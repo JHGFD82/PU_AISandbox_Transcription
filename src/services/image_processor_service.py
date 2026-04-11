@@ -3,16 +3,14 @@
 import logging
 import time
 from typing import Optional, Any
-from collections.abc import Iterator as ABCIterator
-
-from portkey_ai import Portkey
 
 from ..models import (
     model_supports_vision, get_vision_capable_models, resolve_model,
-    get_model_system_role, model_uses_max_completion_tokens, model_has_fixed_parameters,
+    get_model_system_role,
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
 from .api_errors import APISignal, classify_api_error
+from .base_service import BaseService
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY, OCR_SCRIPT_GUIDANCE
@@ -26,31 +24,12 @@ OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
 
 
 
-class ImageProcessorService:
+class ImageProcessorService(BaseService):
     """Handles OCR operations using PortKey API."""
-    
+
     def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None):
-        """Initialize image processor service.
-        
-        Args:
-            api_key: PortKey API key
-            professor: Professor name for token tracking
-            token_tracker: Shared TokenTracker instance
-            token_tracker_file: Custom token tracker file path
-            model: Optional model name to use instead of defaults
-        """
-        self.api_key = api_key
-        self.professor = professor
-        self.custom_model = model  # Store custom model if provided
-        self.client = Portkey(
-            api_key=api_key
-        )
+        super().__init__(api_key, professor, token_tracker, token_tracker_file, model)
         self.image_processor = ImageProcessor()
-        # Use provided token tracker or create new one
-        self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor or "", data_file=token_tracker_file)
-        # Ad-hoc notes appended to prompts at runtime (set via --notes flag)
-        self.system_note: Optional[str] = None
-        self.user_note: Optional[str] = None
     
     def _get_model(self) -> str:
         """Get the model to use for OCR, preferring custom model if specified and supports vision."""
@@ -130,7 +109,7 @@ CRITICAL RULES FOR THIS IMAGE:
 
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
                       user_prompt: str, data_url: str, max_tokens: int) -> Any:
-        """Call the OCR API, using the correct token-limit parameter for the model."""
+        """Call the OCR API with the correct token-limit parameter for the model."""
         messages: list[dict[str, Any]] = [
             {"role": system_role, "content": system_prompt},
             {"role": "user", "content": [
@@ -138,35 +117,11 @@ CRITICAL RULES FOR THIS IMAGE:
                 {"type": "image_url", "image_url": {"url": data_url}}
             ]},
         ]
-        use_completion_tokens = model_uses_max_completion_tokens(model)
-        fixed_params = model_has_fixed_parameters(model)
-        if use_completion_tokens and fixed_params:
-            return self.client.chat.completions.create( # type: ignore[misc]
-                model=model,
-                max_completion_tokens=max_tokens,
-                stream=False,
-                messages=messages,
-            )
-        if use_completion_tokens:
-            return self.client.chat.completions.create( # type: ignore[misc]
-                model=model,
-                temperature=OCR_TEMPERATURE,
-                max_completion_tokens=max_tokens,
-                top_p=OCR_TOP_P,
-                frequency_penalty=OCR_FREQUENCY_PENALTY,
-                presence_penalty=OCR_PRESENCE_PENALTY,
-                stream=False,
-                messages=messages,
-            )
-        return self.client.chat.completions.create( # type: ignore[misc]
-            model=model,
-            temperature=OCR_TEMPERATURE,
-            max_tokens=max_tokens,
-            top_p=OCR_TOP_P,
+        return self._create_completion(
+            model, messages, max_tokens,
+            temperature=OCR_TEMPERATURE, top_p=OCR_TOP_P,
             frequency_penalty=OCR_FREQUENCY_PENALTY,
             presence_penalty=OCR_PRESENCE_PENALTY,
-            stream=False,
-            messages=messages,
         )    
     def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console", vertical: bool = False) -> str:
         """Perform OCR on an image file using the specified model with retry logic."""
@@ -205,34 +160,8 @@ CRITICAL RULES FOR THIS IMAGE:
                 max_tokens = get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
                 logging.info(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
                 response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url, max_tokens)
+                self._record_response_usage(response, model, critical=True)
 
-                assert not isinstance(response, ABCIterator), "Unexpected stream response received."
-                
-                # Log response details
-                if response.id:
-                    logging.info(f'API call successful. Response ID: {response.id}')
-                if response.model:
-                    logging.info(f'Model used: {response.model}')
-                
-                # Log token usage if available
-                if response.usage and response.usage.prompt_tokens is not None and response.usage.completion_tokens is not None and response.usage.total_tokens is not None:
-                    # Record token usage
-                    usage = self.token_tracker.record_usage(
-                        model=response.model or model,
-                        prompt_tokens=response.usage.prompt_tokens,
-                        completion_tokens=response.usage.completion_tokens,
-                        total_tokens=response.usage.total_tokens,
-                        requested_model=model
-                    )
-                    
-                    logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
-                               f'Completion: {response.usage.completion_tokens}, '
-                               f'Total: {response.usage.total_tokens}, '
-                               f'Cost: ${usage.total_cost:.4f}')
-                else:
-                    logging.error('CRITICAL: No token usage information available in response. Token tracking failed!')
-                    logging.error('This OCR operation will not be billed/tracked. Please check API configuration.')
-                
                 if response.choices and len(response.choices) > 0 and response.choices[0].message:
                     content = response.choices[0].message.content
                     if content is None:
