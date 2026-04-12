@@ -25,8 +25,8 @@ OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
 class ImageProcessorService(BaseService):
     """Handles OCR operations using PortKey API."""
 
-    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None):
-        super().__init__(api_key, professor, token_tracker, token_tracker_file, model)
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None, top_p: Optional[float] = None):
+        super().__init__(api_key, professor, token_tracker, token_tracker_file, model, temperature, top_p)
         self.image_processor = ImageProcessor()
     
     def _get_model(self) -> str:
@@ -115,9 +115,13 @@ CRITICAL RULES FOR THIS IMAGE:
                 {"type": "image_url", "image_url": {"url": data_url}}
             ]},
         ]
+        temperature = self.custom_temperature if self.custom_temperature is not None else OCR_TEMPERATURE
+        top_p = self.custom_top_p if self.custom_top_p is not None else OCR_TOP_P
+        if self.custom_temperature is not None or self.custom_top_p is not None:
+            logging.info(f"OCR API params: temperature={temperature}, top_p={top_p}")
         return self._create_completion(
             model, messages, max_tokens,
-            temperature=OCR_TEMPERATURE, top_p=OCR_TOP_P,
+            temperature=temperature, top_p=top_p,
             frequency_penalty=OCR_FREQUENCY_PENALTY,
             presence_penalty=OCR_PRESENCE_PENALTY,
         )    
