@@ -26,8 +26,8 @@ OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
 class ImageProcessorService(BaseService):
     """Handles OCR operations using PortKey API."""
 
-    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None, top_p: Optional[float] = None):
-        super().__init__(api_key, professor, token_tracker, token_tracker_file, model, temperature, top_p)
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None, top_p: Optional[float] = None, max_tokens: Optional[int] = None):
+        super().__init__(api_key, professor, token_tracker, token_tracker_file, model, temperature, top_p, max_tokens)
         self.image_processor = ImageProcessor()
     
     def _get_model(self) -> str:
@@ -195,7 +195,7 @@ CRITICAL RULES FOR THIS IMAGE:
             raise
 
         system_role = get_model_system_role(model)
-        max_tokens = get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
+        max_tokens = self.custom_max_tokens if self.custom_max_tokens is not None else get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
 
         # --- Pass 1: initial transcription ---
         if passes > 1:
