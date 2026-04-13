@@ -1,6 +1,7 @@
 """Image processing service for OCR operations using the Princeton AI Sandbox."""
 
 import logging
+import os
 from typing import Optional, Any
 
 from ..models import (
@@ -190,7 +191,7 @@ CRITICAL RULES FOR THIS IMAGE:
         try:
             data_url = self.image_processor.local_image_to_data_url(file_path)
         except Exception as e:
-            logging.error(f"Failed to process image {file_path}: {e}")
+            logging.error(f"Failed to process image {os.path.basename(file_path)}: {e}")
             raise
 
         system_role = get_model_system_role(model)
