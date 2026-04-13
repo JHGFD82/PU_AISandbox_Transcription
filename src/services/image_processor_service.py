@@ -161,7 +161,7 @@ CRITICAL RULES FOR THIS IMAGE:
         temperature = self.custom_temperature if self.custom_temperature is not None else OCR_TEMPERATURE
         top_p = self.custom_top_p if self.custom_top_p is not None else OCR_TOP_P
         if self.custom_temperature is not None or self.custom_top_p is not None:
-            logging.info(f"OCR API params: temperature={temperature}, top_p={top_p}")
+            logging.debug(f"OCR API params: temperature={temperature}, top_p={top_p}")
         return self._create_completion(
             model, messages, max_tokens,
             temperature=temperature, top_p=top_p,
@@ -201,7 +201,7 @@ CRITICAL RULES FOR THIS IMAGE:
             print(f"  Pass 1/{passes}: Initial transcription...")
 
         def body(attempt: int) -> Any:
-            logging.info(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
+            logging.debug(f'Making OCR API call to model: {model} (system role: {system_role}, max_tokens: {max_tokens})')
             response = self._call_ocr_api(model, system_role, system_prompt, user_prompt, data_url, max_tokens)
             self._record_response_usage(response, model, critical=True)
             if response.choices and len(response.choices) > 0 and response.choices[0].message:
@@ -251,7 +251,7 @@ CRITICAL RULES FOR THIS IMAGE:
                                      refinement_prompt: str, max_tokens: int, pass_num: int) -> str:
         """Execute one refinement pass with retry logic and return the refined transcription."""
         def body(attempt: int) -> Any:
-            logging.info(f"Making OCR refinement API call (pass {pass_num})")
+            logging.debug(f"Making OCR refinement API call (pass {pass_num})")
             response = self._call_refinement_api(
                 model, system_role, system_prompt,
                 user_prompt, data_url, prior_transcription,
