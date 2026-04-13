@@ -224,6 +224,11 @@ CRITICAL RULES FOR THIS IMAGE:
             timeout_msg="OCR returned no content after maximum retries — check model response format in debug logs",
         )
 
+        if passes > 1:
+            print(f"\n--- Pass 1/{passes} result ---")
+            print(transcription)
+            print()
+
         # --- Refinement passes ---
         refinement_prompt = self._build_refinement_prompt(target_language, vertical=vertical)
         for pass_num in range(2, passes + 1):
@@ -234,6 +239,10 @@ CRITICAL RULES FOR THIS IMAGE:
                 user_prompt, data_url, transcription,
                 refinement_prompt, max_tokens, pass_num,
             )
+            if pass_num < passes:
+                print(f"\n--- Pass {pass_num}/{passes} result ---")
+                print(transcription)
+                print()
 
         return transcription
 
