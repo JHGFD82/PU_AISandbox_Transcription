@@ -29,6 +29,8 @@ class ImageProcessorService(BaseService):
     def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None, temperature: Optional[float] = None, top_p: Optional[float] = None, max_tokens: Optional[int] = None):
         super().__init__(api_key, professor, token_tracker, token_tracker_file, model, temperature, top_p, max_tokens)
         self.image_processor = ImageProcessor()
+        # Set to True in parallel mode to suppress per-image console output
+        self._suppress_inline_print: bool = False
     
     def _get_model(self) -> str:
         """Get the model to use for OCR, preferring custom model if specified and supports vision."""
@@ -198,7 +200,7 @@ CRITICAL RULES FOR THIS IMAGE:
         max_tokens = self.custom_max_tokens if self.custom_max_tokens is not None else get_model_max_completion_tokens(model, OCR_MAX_TOKENS)
 
         # --- Pass 1: initial transcription ---
-        if passes > 1:
+        if passes > 1 and not self._suppress_inline_print:
             print(f"  Pass 1/{passes}: Initial transcription...")
 
         def body(attempt: int) -> Any:
@@ -225,7 +227,7 @@ CRITICAL RULES FOR THIS IMAGE:
             timeout_msg="OCR returned no content after maximum retries — check model response format in debug logs",
         )
 
-        if passes > 1:
+        if passes > 1 and not self._suppress_inline_print:
             print(f"\n--- Pass 1/{passes} result ---")
             print(transcription)
             print()
@@ -233,14 +235,15 @@ CRITICAL RULES FOR THIS IMAGE:
         # --- Refinement passes ---
         refinement_prompt = self._build_refinement_prompt(target_language, vertical=vertical)
         for pass_num in range(2, passes + 1):
-            print(f"  Pass {pass_num}/{passes}: Refining...")
+            if not self._suppress_inline_print:
+                print(f"  Pass {pass_num}/{passes}: Refining...")
             logging.info(f"Starting OCR refinement pass {pass_num}/{passes}")
             transcription = self._run_single_refinement_pass(
                 model, system_role, system_prompt,
                 user_prompt, data_url, transcription,
                 refinement_prompt, max_tokens, pass_num,
             )
-            if pass_num < passes:
+            if pass_num < passes and not self._suppress_inline_print:
                 print(f"\n--- Pass {pass_num}/{passes} result ---")
                 print(transcription)
                 print()
