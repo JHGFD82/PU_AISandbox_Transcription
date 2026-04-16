@@ -10,6 +10,7 @@ from ..models import (
     get_model_max_completion_tokens, maybe_sync_model_pricing, get_default_model,
 )
 from .base_service import BaseService
+from ..console import print_pass_result
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, OCR_SCRIPT_GUIDANCE
@@ -261,9 +262,7 @@ CRITICAL RULES FOR THIS IMAGE:
         )
 
         if passes > 1 and not self._suppress_inline_print:
-            print(f"\n--- Pass 1/{passes} result ---")
-            print(transcription)
-            print()
+            print_pass_result(f"Pass 1/{passes} result", transcription)
 
         # --- Refinement passes ---
         refinement_prompt = self._build_refinement_prompt(target_language, vertical=vertical)
@@ -277,8 +276,6 @@ CRITICAL RULES FOR THIS IMAGE:
                 refinement_prompt, max_tokens, pass_num,
             )
             if pass_num < passes and not self._suppress_inline_print:
-                print(f"\n--- Pass {pass_num}/{passes} result ---")
-                print(transcription)
-                print()
+                print_pass_result(f"Pass {pass_num}/{passes} result", transcription)
 
         return transcription
