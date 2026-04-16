@@ -125,6 +125,27 @@ CRITICAL RULES FOR THIS IMAGE:
             "Return ONLY the corrected transcription — no commentary, no explanation, no preamble."
         )
 
+    def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
+                      user_prompt: str, data_url: str, max_tokens: int) -> Any:
+        """Call the OCR API with the correct token-limit parameter for the model."""
+        messages: list[dict[str, Any]] = [
+            {"role": system_role, "content": system_prompt},
+            {"role": "user", "content": [
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {"url": data_url}}
+            ]},
+        ]
+        temperature = self.custom_temperature if self.custom_temperature is not None else OCR_TEMPERATURE
+        top_p = self.custom_top_p if self.custom_top_p is not None else OCR_TOP_P
+        if self.custom_temperature is not None or self.custom_top_p is not None:
+            logging.debug(f"OCR API params: temperature={temperature}, top_p={top_p}")
+        return self._create_completion(
+            model, messages, max_tokens,
+            temperature=temperature, top_p=top_p,
+            frequency_penalty=OCR_FREQUENCY_PENALTY,
+            presence_penalty=OCR_PRESENCE_PENALTY,
+        )
+
     def _call_refinement_api(self, model: str, system_role: str, system_prompt: str,
                               first_user_prompt: str, data_url: str,
                               prior_transcription: str, refinement_prompt: str,
@@ -151,26 +172,38 @@ CRITICAL RULES FOR THIS IMAGE:
             presence_penalty=OCR_PRESENCE_PENALTY,
         )
 
-    def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
-                      user_prompt: str, data_url: str, max_tokens: int) -> Any:
-        """Call the OCR API with the correct token-limit parameter for the model."""
-        messages: list[dict[str, Any]] = [
-            {"role": system_role, "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": user_prompt},
-                {"type": "image_url", "image_url": {"url": data_url}}
-            ]},
-        ]
-        temperature = self.custom_temperature if self.custom_temperature is not None else OCR_TEMPERATURE
-        top_p = self.custom_top_p if self.custom_top_p is not None else OCR_TOP_P
-        if self.custom_temperature is not None or self.custom_top_p is not None:
-            logging.debug(f"OCR API params: temperature={temperature}, top_p={top_p}")
-        return self._create_completion(
-            model, messages, max_tokens,
-            temperature=temperature, top_p=top_p,
-            frequency_penalty=OCR_FREQUENCY_PENALTY,
-            presence_penalty=OCR_PRESENCE_PENALTY,
-        )    
+    def _run_single_refinement_pass(self, model: str, system_role: str, system_prompt: str,
+                                     user_prompt: str, data_url: str, prior_transcription: str,
+                                     refinement_prompt: str, max_tokens: int, pass_num: int) -> str:
+        """Execute one refinement pass with retry logic and return the refined transcription."""
+        def body(attempt: int) -> Any:
+            logging.debug(f"Making OCR refinement API call (pass {pass_num})")
+            response = self._call_refinement_api(
+                model, system_role, system_prompt,
+                user_prompt, data_url, prior_transcription,
+                refinement_prompt, max_tokens,
+            )
+            self._record_response_usage(response, model, critical=True)
+            if response.choices and len(response.choices) > 0 and response.choices[0].message:
+                content = response.choices[0].message.content
+                if content is None:
+                    logging.warning(f"Refinement pass {pass_num} returned None content.")
+                    return None
+                if not isinstance(content, str):
+                    logging.warning(f"Unexpected content type {type(content)}: {content!r}. Retrying...")
+                    return None
+                if not content.strip():
+                    logging.warning(f"Refinement pass {pass_num} returned empty content (attempt {attempt + 1}/{MAX_RETRIES}). Retrying...")
+                    return None
+                return content
+            logging.warning("No choices in refinement API response. Retrying...")
+            return None
+
+        return self._run_with_retry(
+            body, model, f"OCR refinement pass {pass_num}",
+            timeout_msg=f"OCR refinement pass {pass_num} returned no content after maximum retries",
+        )
+
     def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console", vertical: bool = False, passes: int = 1) -> str:
         """Perform OCR on an image file using the specified model with retry logic.
 
@@ -249,35 +282,3 @@ CRITICAL RULES FOR THIS IMAGE:
                 print()
 
         return transcription
-
-    def _run_single_refinement_pass(self, model: str, system_role: str, system_prompt: str,
-                                     user_prompt: str, data_url: str, prior_transcription: str,
-                                     refinement_prompt: str, max_tokens: int, pass_num: int) -> str:
-        """Execute one refinement pass with retry logic and return the refined transcription."""
-        def body(attempt: int) -> Any:
-            logging.debug(f"Making OCR refinement API call (pass {pass_num})")
-            response = self._call_refinement_api(
-                model, system_role, system_prompt,
-                user_prompt, data_url, prior_transcription,
-                refinement_prompt, max_tokens,
-            )
-            self._record_response_usage(response, model, critical=True)
-            if response.choices and len(response.choices) > 0 and response.choices[0].message:
-                content = response.choices[0].message.content
-                if content is None:
-                    logging.warning(f"Refinement pass {pass_num} returned None content.")
-                    return None
-                if not isinstance(content, str):
-                    logging.warning(f"Unexpected content type {type(content)}: {content!r}. Retrying...")
-                    return None
-                if not content.strip():
-                    logging.warning(f"Refinement pass {pass_num} returned empty content (attempt {attempt + 1}/{MAX_RETRIES}). Retrying...")
-                    return None
-                return content
-            logging.warning("No choices in refinement API response. Retrying...")
-            return None
-
-        return self._run_with_retry(
-            body, model, f"OCR refinement pass {pass_num}",
-            timeout_msg=f"OCR refinement pass {pass_num} returned no content after maximum retries",
-        )
