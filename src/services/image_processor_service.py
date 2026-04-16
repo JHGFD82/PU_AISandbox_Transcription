@@ -15,12 +15,13 @@ from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
 from .constants import MAX_RETRIES, OCR_SCRIPT_GUIDANCE
 
-# OCR API parameters (conservative to reduce hallucination)
-OCR_TEMPERATURE: float = 0.0   # Deterministic output
-OCR_MAX_TOKENS: int = 4000
-OCR_TOP_P: float = 0.1         # Very low to prevent creativity
-OCR_FREQUENCY_PENALTY: float = 0.5  # Penalize repetition of tokens
-OCR_PRESENCE_PENALTY: float = 0.3   # Encourage diversity
+from ..settings import (
+    OCR_TEMPERATURE,
+    OCR_MAX_TOKENS,
+    OCR_TOP_P,
+    OCR_FREQUENCY_PENALTY,
+    OCR_PRESENCE_PENALTY,
+)
 
 
 
