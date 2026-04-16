@@ -13,7 +13,8 @@ from .base_service import BaseService
 from ..console import print_pass_result
 from ..processors.image_processor import ImageProcessor
 from ..tracking.token_tracker import TokenTracker
-from .constants import MAX_RETRIES, OCR_SCRIPT_GUIDANCE
+from .constants import MAX_RETRIES
+from .prompts import OcrPromptSpec
 
 from ..settings import (
     OCR_TEMPERATURE,
@@ -48,60 +49,14 @@ class ImageProcessorService(BaseService):
         return model
     
     def _create_ocr_prompt(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
-        """Create system and user prompt templates for OCR."""
-        system_prompt = self._build_system_prompt(target_language, vertical=vertical)
-        user_prompt = self._build_user_prompt(target_language, vertical=vertical)
-
-        if self.system_note:
-            system_prompt += f"\n\nADDITIONAL INSTRUCTIONS:\n{self.system_note}"
-        if self.user_note:
-            user_prompt += f"\n\nADDITIONAL NOTES:\n{self.user_note}"
-        return system_prompt, user_prompt
-    
-    def _build_system_prompt(self, target_language: str, vertical: bool = False) -> str:
-        """Build the system prompt for OCR operations."""
-        script_note = OCR_SCRIPT_GUIDANCE.get(target_language, "")
-        script_section = f"\nSCRIPT NOTES:\n{script_note}\n" if script_note else ""
-        vertical_section = (
-            "\nTEXT ORIENTATION:\n"
-            "The majority of text in this image is vertical — written top-to-bottom, "
-            "with columns ordered right-to-left. Read and transcribe each column from top to bottom, "
-            "proceeding from the rightmost column to the leftmost.\n"
-        ) if vertical else ""
-        return f"""You are an expert OCR assistant specializing in text extraction from images containing \
-Chinese, Japanese, Korean, and English.
-
-Your task is to transcribe all legibly visible text from the image exactly as it appears, preserving layout, \
-orientation (horizontal or vertical), and structure as closely as possible.
-{script_section}{vertical_section}
-RULES:
-- Extract ONLY text that is actually visible in the image — do NOT add, invent, or hallucinate any content
-- Do NOT repeat text unless it genuinely appears multiple times in the image
-- Do NOT translate — output text in its original language and script exactly as shown
-- Do NOT add commentary, analysis, disclaimers, or assumptions
-- Preserve original formatting, line breaks, numbering, symbols, and special characters
-- If text is partially obscured or unclear, extract what you can; note any unreadable sections with a \
-single brief line at the end (e.g., "[Some text unclear due to image quality]")"""
-
-    def _build_user_prompt(self, target_language: str, vertical: bool = False) -> str:
-        """Build the user prompt template for OCR."""
-        script_note = OCR_SCRIPT_GUIDANCE.get(target_language, "")
-        script_reinforcement = f"\nSCRIPT REMINDER: {script_note}" if script_note else ""
-        vertical_reinforcement = (
-            "\nORIENTATION REMINDER: Text is vertical — transcribe each column top-to-bottom, "
-            "proceeding right-to-left across columns."
-        ) if vertical else ""
-        return f"""Transcribe all legibly visible text from this image exactly as it appears in {target_language}.
-{script_reinforcement}{vertical_reinforcement}
-
-CRITICAL RULES FOR THIS IMAGE:
-- Output ONLY text that is genuinely visible — do NOT invent, fill in, or hallucinate any characters or words
-- Do NOT translate — preserve the original script and language exactly as shown, even in mixed-language content
-- Include ALL text elements: body text, headings, captions, page numbers, table contents, labels, and marginalia
-- Preserve line breaks, paragraph spacing, and structural layout as faithfully as plain text allows
-- Reproduce punctuation, symbols, and special characters exactly as they appear
-- If a section of text is partially obscured or too degraded to read, extract what you can and note the gap with a single brief marker (e.g., "[text unclear]") — do not skip the surrounding legible text
-- Do not add commentary, disclaimers, or explanatory notes outside of the above illegibility marker"""
+        """Create system and user prompts for OCR."""
+        spec = OcrPromptSpec(
+            target_language=target_language,
+            vertical=vertical,
+            system_note=self.system_note,
+            user_note=self.user_note,
+        )
+        return spec.system_prompt(), spec.user_prompt()
 
     def build_prompts(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
         """Return (system_prompt, user_prompt) without calling the API.
@@ -112,20 +67,8 @@ CRITICAL RULES FOR THIS IMAGE:
 
     def _build_refinement_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the user prompt for a refinement pass (pass 2+)."""
-        script_note = OCR_SCRIPT_GUIDANCE.get(target_language, "")
-        script_reinforcement = f"\nSCRIPT REMINDER: {script_note}" if script_note else ""
-        vertical_reinforcement = (
-            "\nORIENTATION REMINDER: Text is vertical — transcribe each column top-to-bottom, "
-            "proceeding right-to-left across columns."
-        ) if vertical else ""
-        return (
-            f"Review the transcription above carefully against this image."
-            f"{script_reinforcement}{vertical_reinforcement}\n\n"
-            "Correct any errors you find: wrong or missing characters, extra or hallucinated text, "
-            "misread characters, or formatting issues. "
-            "If the transcription is already accurate, return it unchanged.\n\n"
-            "Return ONLY the corrected transcription — no commentary, no explanation, no preamble."
-        )
+        spec = OcrPromptSpec(target_language=target_language, vertical=vertical)
+        return spec.refinement_prompt()
 
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
                       user_prompt: str, data_url: str, max_tokens: int) -> Any:
