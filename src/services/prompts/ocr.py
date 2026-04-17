@@ -21,6 +21,8 @@ class OcrPromptSpec:
     user_note: Optional[str] = None
 
     def _script_note(self) -> str:
+        if self.kanbun:
+            return F.KANBUN_SCRIPT_NOTE
         return F.OCR_SCRIPT_GUIDANCE.get(self.target_language, "")
 
     def system_prompt(self) -> str:
