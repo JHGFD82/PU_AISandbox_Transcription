@@ -16,6 +16,7 @@ class OcrPromptSpec:
 
     target_language: str
     vertical: bool = False
+    kanbun: bool = False
     system_note: Optional[str] = None
     user_note: Optional[str] = None
 
@@ -29,6 +30,8 @@ class OcrPromptSpec:
             sections.append("SCRIPT NOTES:\n" + script_note)
         if self.vertical:
             sections.append(F.OCR_VERTICAL_BLOCK)
+        if self.kanbun:
+            sections.append(F.ADDITIONAL_INSTRUCTIONS.format(note=F.KANBUN_OCR_NOTE))
         sections.append(F.OCR_RULES)
         if self.system_note:
             sections.append(F.ADDITIONAL_INSTRUCTIONS.format(note=self.system_note))
