@@ -26,7 +26,7 @@ class OcrPromptSpec:
         return F.OCR_SCRIPT_GUIDANCE.get(self.target_language, "")
 
     def system_prompt(self) -> str:
-        sections = [F.OCR_SYSTEM_BASE]
+        sections = [F.OCR_SYSTEM_BASE.format(target=self.target_language)]
         script_note = self._script_note()
         if script_note:
             sections.append("SCRIPT NOTES:\n" + script_note)
