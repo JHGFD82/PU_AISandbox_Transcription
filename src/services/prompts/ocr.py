@@ -26,37 +26,33 @@ class OcrPromptSpec:
         return F.OCR_SCRIPT_GUIDANCE.get(self.target_language, "")
 
     def system_prompt(self) -> str:
-        sections = [F.OCR_SYSTEM_BASE.format(target=self.target_language)]
         script_note = self._script_note()
-        if script_note:
-            sections.append("SCRIPT NOTES:\n" + script_note)
-        if self.vertical:
-            sections.append(F.OCR_VERTICAL_BLOCK)
-        if self.kanbun:
-            sections.append(F.ADDITIONAL_INSTRUCTIONS.format(note=F.KANBUN_OCR_NOTE))
-        sections.append(F.OCR_RULES)
-        if self.system_note:
-            sections.append(F.ADDITIONAL_INSTRUCTIONS.format(note=self.system_note))
-        return "\n\n".join(sections)
+        sections = [
+            F.OCR_SYSTEM_BASE.format(target=self.target_language),
+            ("SCRIPT NOTES:\n" + script_note) if script_note else None,
+            F.OCR_VERTICAL_BLOCK if self.vertical else None,
+            F.ADDITIONAL_INSTRUCTIONS.format(note=F.KANBUN_OCR_NOTE) if self.kanbun else None,
+            F.OCR_RULES,
+            F.ADDITIONAL_INSTRUCTIONS.format(note=self.system_note) if self.system_note else None,
+        ]
+        return "\n\n".join(s for s in sections if s)
 
     def user_prompt(self) -> str:
-        base = F.OCR_USER_BASE_KANBUN if self.kanbun else F.OCR_USER_BASE.format(target=self.target_language)
-        parts = [base]
         script_note = self._script_note()
-        if script_note:
-            parts.append("SCRIPT REMINDER: " + script_note)
-        if self.vertical:
-            parts.append(F.OCR_VERTICAL_REINFORCEMENT)
-        parts.append(F.OCR_USER_RULES)
-        if self.user_note:
-            parts.append(F.ADDITIONAL_NOTES.format(note=self.user_note))
-        return "\n\n".join(parts)
+        parts = [
+            F.OCR_USER_BASE_KANBUN if self.kanbun else F.OCR_USER_BASE.format(target=self.target_language),
+            ("SCRIPT REMINDER: " + script_note) if script_note else None,
+            F.OCR_VERTICAL_REINFORCEMENT if self.vertical else None,
+            F.OCR_USER_RULES,
+            F.ADDITIONAL_NOTES.format(note=self.user_note) if self.user_note else None,
+        ]
+        return "\n\n".join(s for s in parts if s)
 
     def refinement_prompt(self) -> str:
-        parts = [F.OCR_REFINEMENT_BASE]
         script_note = self._script_note()
-        if script_note:
-            parts.append("SCRIPT REMINDER: " + script_note)
-        if self.vertical:
-            parts.append(F.OCR_VERTICAL_REINFORCEMENT)
-        return "\n\n".join(parts)
+        parts = [
+            F.OCR_REFINEMENT_BASE,
+            ("SCRIPT REMINDER: " + script_note) if script_note else None,
+            F.OCR_VERTICAL_REINFORCEMENT if self.vertical else None,
+        ]
+        return "\n\n".join(s for s in parts if s)
