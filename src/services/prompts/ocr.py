@@ -40,7 +40,8 @@ class OcrPromptSpec:
         return "\n\n".join(sections)
 
     def user_prompt(self) -> str:
-        parts = [F.OCR_USER_BASE.format(target=self.target_language)]
+        base = F.OCR_USER_BASE_KANBUN if self.kanbun else F.OCR_USER_BASE.format(target=self.target_language)
+        parts = [base]
         script_note = self._script_note()
         if script_note:
             parts.append("SCRIPT REMINDER: " + script_note)
