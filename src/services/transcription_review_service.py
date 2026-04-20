@@ -54,6 +54,7 @@ class TranscriptionReviewService(BaseService):
         self,
         language: str,
         kanbun: bool = False,
+        kanbun_main: bool = False,
         text: str = "[transcription text would appear here]",
     ) -> tuple[str, str]:
         """Return (system_prompt, user_prompt) without calling the API.
@@ -63,6 +64,7 @@ class TranscriptionReviewService(BaseService):
         spec = TranscriptionReviewPromptSpec(
             language=language,
             kanbun=kanbun,
+            kanbun_main=kanbun_main,
             system_note=self.system_note,
             user_note=self.user_note,
         )
@@ -120,6 +122,7 @@ class TranscriptionReviewService(BaseService):
         text: str,
         language: str,
         kanbun: bool = False,
+        kanbun_main: bool = False,
     ) -> str:
         """Review a transcription and return a JSON report string.
 
@@ -132,12 +135,16 @@ class TranscriptionReviewService(BaseService):
             ``parse_single_language_code``.
         kanbun:
             Whether the text contains kanbun with kundoku annotations.
+        kanbun_main:
+            Whether the transcription was produced in main-character-only mode
+            (okurigana, furigana, kaeriten omitted intentionally).
         """
         model = self._get_model()
         system_role = get_model_system_role(model)
         spec = TranscriptionReviewPromptSpec(
             language=language,
             kanbun=kanbun,
+            kanbun_main=kanbun_main,
             system_note=self.system_note,
             user_note=self.user_note,
         )

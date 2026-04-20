@@ -17,13 +17,19 @@ class TranscriptionReviewPromptSpec:
 
     language: str
     kanbun: bool = False
+    kanbun_main: bool = False
     system_note: Optional[str] = None
     user_note: Optional[str] = None
 
     def system_prompt(self) -> str:
+        kanbun_note = (
+            F.TRANSCRIPTION_REVIEW_KANBUN_MAIN_NOTE if self.kanbun_main else
+            F.TRANSCRIPTION_REVIEW_KANBUN_NOTE if self.kanbun else
+            None
+        )
         sections = [
             F.TRANSCRIPTION_REVIEW_ROLE.format(language=self.language),
-            F.TRANSCRIPTION_REVIEW_KANBUN_NOTE if self.kanbun else None,
+            kanbun_note,
             F.TRANSCRIPTION_REVIEW_APPROACH,
             F.TRANSCRIPTION_REVIEW_SCHEMA,
             F.TRANSCRIPTION_REVIEW_RULES,
