@@ -33,6 +33,7 @@ class ImageProcessorService(BaseService):
         super().__init__(api_key, professor, token_tracker, token_tracker_file, model, temperature, top_p, max_tokens)
         self.image_processor = ImageProcessor()
         self.kanbun: bool = False
+        self.kanbun_main: bool = False
         # Set to True in parallel mode to suppress per-image console output
         self._suppress_inline_print: bool = False
     
@@ -55,6 +56,7 @@ class ImageProcessorService(BaseService):
             target_language=target_language,
             vertical=vertical,
             kanbun=self.kanbun,
+            kanbun_main=self.kanbun_main,
             system_note=self.system_note,
             user_note=self.user_note,
         )
@@ -69,7 +71,7 @@ class ImageProcessorService(BaseService):
 
     def _build_refinement_prompt(self, target_language: str, vertical: bool = False) -> str:
         """Build the user prompt for a refinement pass (pass 2+)."""
-        spec = OcrPromptSpec(target_language=target_language, vertical=vertical, kanbun=self.kanbun)
+        spec = OcrPromptSpec(target_language=target_language, vertical=vertical, kanbun=self.kanbun, kanbun_main=self.kanbun_main)
         return spec.refinement_prompt()
 
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
