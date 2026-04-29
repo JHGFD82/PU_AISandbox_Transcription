@@ -50,11 +50,12 @@ class ImageProcessorService(BaseService):
             logging.warning(f"OCR default model '{ocr_default}' not available; using '{model}' instead.")
         return model
     
-    def _create_ocr_prompt(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
+    def _create_ocr_prompt(self, target_language: str, vertical: bool = False, spread: bool = False) -> tuple[str, str]:
         """Create system and user prompts for OCR."""
         spec = OcrPromptSpec(
             target_language=target_language,
             vertical=vertical,
+            spread=spread,
             kanbun=self.kanbun,
             kanbun_main=self.kanbun_main,
             system_note=self.system_note,
@@ -62,16 +63,16 @@ class ImageProcessorService(BaseService):
         )
         return spec.system_prompt(), spec.user_prompt()
 
-    def build_prompts(self, target_language: str, vertical: bool = False) -> tuple[str, str]:
+    def build_prompts(self, target_language: str, vertical: bool = False, spread: bool = False) -> tuple[str, str]:
         """Return (system_prompt, user_prompt) without calling the API.
 
         Used by --dry-run mode to preview what would be sent to the model.
         """
-        return self._create_ocr_prompt(target_language, vertical=vertical)
+        return self._create_ocr_prompt(target_language, vertical=vertical, spread=spread)
 
-    def _build_refinement_prompt(self, target_language: str, vertical: bool = False) -> str:
+    def _build_refinement_prompt(self, target_language: str, vertical: bool = False, spread: bool = False) -> str:
         """Build the user prompt for a refinement pass (pass 2+)."""
-        spec = OcrPromptSpec(target_language=target_language, vertical=vertical, kanbun=self.kanbun, kanbun_main=self.kanbun_main)
+        spec = OcrPromptSpec(target_language=target_language, vertical=vertical, spread=spread, kanbun=self.kanbun, kanbun_main=self.kanbun_main)
         return spec.refinement_prompt()
 
     def _call_ocr_api(self, model: str, system_role: str, system_prompt: str,
@@ -153,7 +154,7 @@ class ImageProcessorService(BaseService):
             timeout_msg=f"OCR refinement pass {pass_num} returned no content after maximum retries",
         )
 
-    def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console", vertical: bool = False, passes: int = 1) -> str:
+    def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console", vertical: bool = False, spread: bool = False, passes: int = 1) -> str:
         """Perform OCR on an image file using the specified model with retry logic.
 
         If passes > 1, each additional pass sends the image and prior transcription back
@@ -169,7 +170,7 @@ class ImageProcessorService(BaseService):
                 f"Please use one of the following vision-capable models: {vision_models}"
             )
 
-        system_prompt, user_prompt = self._create_ocr_prompt(target_language, vertical=vertical)
+        system_prompt, user_prompt = self._create_ocr_prompt(target_language, vertical=vertical, spread=spread)
 
         # Convert image to data URL
         try:
@@ -213,7 +214,7 @@ class ImageProcessorService(BaseService):
             print_pass_result(f"Pass 1/{passes} result", transcription)
 
         # --- Refinement passes ---
-        refinement_prompt = self._build_refinement_prompt(target_language, vertical=vertical)
+        refinement_prompt = self._build_refinement_prompt(target_language, vertical=vertical, spread=spread)
         for pass_num in range(2, passes + 1):
             if not self._suppress_inline_print:
                 print(f"  Pass {pass_num}/{passes}: Refining...")

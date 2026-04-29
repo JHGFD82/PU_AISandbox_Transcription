@@ -18,6 +18,7 @@ class OcrPromptSpec:
     vertical: bool = False
     kanbun: bool = False
     kanbun_main: bool = False
+    spread: bool = False
     system_note: Optional[str] = None
     user_note: Optional[str] = None
 
@@ -39,6 +40,7 @@ class OcrPromptSpec:
             F.OCR_SYSTEM_BASE.format(target=self.target_language),
             ("SCRIPT NOTES:\n" + script_note) if script_note else None,
             F.OCR_VERTICAL_BLOCK if self.vertical else None,
+            F.OCR_SPREAD_NOTE if self.spread else None,
             F.ADDITIONAL_INSTRUCTIONS.format(note=kanbun_note) if kanbun_note else None,
             F.OCR_RULES,
             F.ADDITIONAL_INSTRUCTIONS.format(note=self.system_note) if self.system_note else None,
