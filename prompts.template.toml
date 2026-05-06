@@ -1,0 +1,101 @@
+# prompts.toml — Transcription plugin prompt fragment overrides
+# ─────────────────────────────────────────────────────────────────────────────
+# HOW TO USE:
+#   1. Copy this file to prompts.toml in the PU_AISandbox repository root.
+#   2. Uncomment only the keys you want to override and replace the value.
+#   3. Leave all other keys absent — they fall back to the built-in defaults.
+#
+# prompts.toml is git-ignored and will not be committed.
+# Full default text for every key is in
+#   plugins/transcription/src/services/prompts/ocr_fragments.py
+#
+# PLACEHOLDERS: Some fragments contain {placeholder} tokens that are filled
+# in at runtime. If you override such a fragment, you must keep the same
+# placeholders or the prompt will be missing information.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [ocr]
+# Fragments used when transcribing (OCR) images.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# [ocr]
+
+# The system-prompt role and task description for OCR.
+# Placeholder: {target} (target language name)
+# system_base = """
+# You are an expert OCR assistant specializing in {target} text extraction from images.
+#
+# Your task is to transcribe all legibly visible text from the image exactly as it appears,
+# preserving layout, orientation (horizontal or vertical), and structure as closely as possible.
+# """
+
+# The rule block appended to the OCR system prompt.
+# rules = """
+# RULES:
+# - Extract ONLY text that is actually visible in the image — do NOT add, invent, or hallucinate any content
+# - Do NOT repeat text unless it genuinely appears multiple times in the image
+# ...
+# """
+
+# The base user message for OCR.
+# Placeholder: {target}
+# user_base = "Transcribe all legibly visible text from this image exactly as it appears in {target}."
+
+# The critical-rules block in the OCR user message.
+# user_rules = """
+# CRITICAL RULES FOR THIS IMAGE:
+# - Output ONLY text that is genuinely visible — do NOT invent, fill in, or hallucinate any characters or words
+# ...
+# """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [transcription_review]
+# Fragments used when reviewing an OCR transcription for errors.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# [transcription_review]
+
+# The reviewer role and task description.
+# Placeholder: {language}
+# role = """
+# You are an expert proofreader and language scholar specialising in {language} texts.
+# You will be given text that was produced by an AI transcription (OCR) system from a
+# historical or archival document. Your task is to review it for OCR errors, identify
+# the probable source, and report each error with one or more corrected candidates.
+# """
+
+# The step-by-step review methodology injected into the system prompt.
+# approach = """
+# REVIEW APPROACH:
+# 1. Assess whether the text makes sense as a whole.
+# 2. Identify the source type (genre, period, register) to establish interpretive context.
+# 3. Use that context to spot characters or words that are likely OCR misreadings.
+# 4. For each error, record the most probable correction(s) in descending confidence order.
+# """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [ocr_script_guidance]
+# Script-specific notes injected into OCR (transcription) system prompts.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# [ocr_script_guidance]
+
+# Keys are exact target language names as they appear in LANGUAGE_MAP.
+# Built-in languages (defined in ocr_fragments.py; override or add here):
+#   Chinese, Simplified Chinese, Traditional Chinese, Japanese, Korean, English
+
+# "Vietnamese" = """
+# The text uses the Vietnamese Latin-based script (Chữ Quốc ngữ).
+# Transcribe all diacritical marks exactly as they appear — tonal marks and
+# vowel modifiers are semantically significant and must not be omitted.
+# """
+
+# "Arabic" = """
+# The text uses the Arabic script, written right-to-left.
+# Transcribe each character in its contextual form exactly as it appears,
+# including vowel diacritics (harakat) if present.
+# """
