@@ -84,6 +84,7 @@ _register(
 
 from src.cli import _add_common_flags, _add_notes_flags           # noqa: E402
 from src.config import parse_single_language_code                 # noqa: E402
+from src.errors import CLIError                                    # noqa: E402
 from src.services.constants import DEFAULT_PARALLEL_WORKERS       # noqa: E402
 from src.settings import DEFAULT_OCR_PASSES                       # noqa: E402
 
@@ -217,12 +218,8 @@ class TranscriptionPlugin:
         top_p: Optional[float],
         max_tokens: Optional[int],
     ) -> None:
-        """Execute the transcribe or transcription_review command.
-
-        Currently delegates to SandboxProcessor.
-        TODO (Phase 4 Step 6): move the full dispatch logic here and remove
-        _run_transcribe / _run_transcription_review from SandboxProcessor.
-        """
+        """Execute the transcribe or transcription_review command."""
+        import os
         from src.runtime.sandbox_processor import SandboxProcessor
 
         sandbox = SandboxProcessor(
@@ -232,10 +229,109 @@ class TranscriptionPlugin:
             top_p=top_p,
             max_tokens=max_tokens,
         )
+
         if args.command == "transcribe":
-            sandbox._run_transcribe(args)
-        else:
-            sandbox._run_transcription_review(args)
+            # language_code is already resolved to a full name by parse_single_language_code
+            target_language: str = args.language_code
+
+            if getattr(args, 'notes', False):
+                _vertical_flag = getattr(args, 'vertical', False)
+                _preview_sys, _preview_usr = sandbox.image_processor_service.build_prompts(
+                    target_language, vertical=_vertical_flag
+                )
+                sys_note, usr_note = sandbox._collect_notes(_preview_sys, _preview_usr)
+                sandbox.image_processor_service.system_note = sys_note
+                sandbox.image_processor_service.user_note = usr_note
+
+            sandbox._apply_inline_notes(sandbox.image_processor_service, args)
+
+            if getattr(args, 'kanbun', False):
+                sandbox.image_processor_service.kanbun = True
+
+            if getattr(args, 'kanbun_main', False):
+                sandbox.image_processor_service.kanbun_main = True
+
+            if getattr(args, 'preserve_tables', False):
+                sandbox.image_processor_service.tables = True
+
+            if getattr(args, 'dry_run', False):
+                vertical_dr = getattr(args, 'vertical', False)
+                spread_dr = getattr(args, 'spread', False)
+                passes_dr = getattr(args, 'passes', 1)
+                model_dr = sandbox.image_processor_service._get_model()
+                sys_p, usr_p = sandbox.image_processor_service.build_prompts(target_language, vertical=vertical_dr, spread=spread_dr)
+                note = "Image content would be base64-encoded and attached to the user message"
+                if passes_dr > 1:
+                    note += f"; {passes_dr} OCR passes would run sequentially"
+                sandbox._dry_run_display(model_dr, sys_p, usr_p, note=note, **sandbox._sampling_kwargs(args))
+                return
+
+            if not args.input_file:
+                raise CLIError("Input file is required for transcribe command. Use -i option.")
+
+            input_path = os.path.abspath(args.input_file)
+            output_file = sandbox._resolve_output_path(args)
+            vertical = getattr(args, 'vertical', False)
+            spread = getattr(args, 'spread', False)
+            passes = getattr(args, 'passes', 1)
+            workers = getattr(args, 'workers', 1)
+            if passes < 1:
+                raise CLIError("--passes must be at least 1.")
+
+            if os.path.isdir(input_path):
+                sandbox.process_image_folder(input_path, target_language, output_file, vertical=vertical, spread=spread, passes=passes, workers=workers)
+            else:
+                file_type = sandbox._detect_and_validate_file(input_path)
+                if file_type != 'image':
+                    raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
+                sandbox.process_image(input_path, target_language, output_file, vertical=vertical, spread=spread, passes=passes)
+
+        else:  # transcription_review
+            language: str = args.language_code  # already resolved by parse_single_language_code
+            kanbun = getattr(args, 'kanbun', False)
+            kanbun_main = getattr(args, 'kanbun_main', False)
+
+            if getattr(args, 'notes', False):
+                _preview_sys, _preview_usr = sandbox.transcription_review_service.build_prompts(language, kanbun=kanbun, kanbun_main=kanbun_main)
+                sys_note, usr_note = sandbox._collect_notes(_preview_sys, _preview_usr)
+                sandbox.transcription_review_service.system_note = sys_note
+                sandbox.transcription_review_service.user_note = usr_note
+
+            sandbox._apply_inline_notes(sandbox.transcription_review_service, args)
+
+            if getattr(args, 'dry_run', False):
+                model_dr = sandbox.transcription_review_service._get_model()
+                sys_p, usr_p = sandbox.transcription_review_service.build_prompts(language, kanbun=kanbun, kanbun_main=kanbun_main)
+                sandbox._dry_run_display(
+                    model_dr, sys_p, usr_p,
+                    note="Transcription text would be appended to the user prompt at runtime",
+                    **sandbox._sampling_kwargs(args),
+                )
+                return
+
+            if args.input_file:
+                input_path = os.path.abspath(args.input_file)
+                if not os.path.exists(input_path):
+                    raise CLIError(f"Input file '{input_path}' not found.")
+                with open(input_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+                if not text.strip():
+                    raise CLIError(f"Input file '{input_path}' is empty.")
+            elif args.custom_text:
+                text = sandbox._collect_multiline("Paste the transcription result to review")
+                if not text.strip():
+                    raise CLIError("No transcription text provided.")
+            else:
+                raise CLIError(
+                    "No input supplied.\n"
+                    "  transcription_review expects the text output of a prior transcription, "
+                    "not the original document or image.\n"
+                    "  Use -i <file.txt> to supply a saved transcription file, "
+                    "or -c to paste the text interactively."
+                )
+
+            output_file_r = sandbox._resolve_output_path(args)
+            sandbox.process_transcription_review(text, language, kanbun=kanbun, kanbun_main=kanbun_main, output_file=output_file_r)
 
 
 plugin = TranscriptionPlugin()
