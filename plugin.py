@@ -89,11 +89,18 @@ _register(
 # when running from that repo's root directory.
 
 from src.cli import _add_common_flags, _add_notes_flags           # noqa: E402
-from src.config import parse_single_language_code                 # noqa: E402
+from src.config import parse_single_language_code, register_language  # noqa: E402
 from src.errors import CLIError                                    # noqa: E402
 from src.services.constants import DEFAULT_PARALLEL_WORKERS       # noqa: E402
 from src.settings import DEFAULT_OCR_PASSES                       # noqa: E402
 
+# Register languages supported by this plugin into the shared registry.
+# Transcription is independent of translation plugins; registering here
+# ensures these codes are always available when only transcription is installed.
+register_language('en', 'English')
+register_language('zh', 'Chinese')
+register_language('jp', 'Japanese')
+register_language('kr', 'Korean')
 
 # ── Plugin class ──────────────────────────────────────────────────────────────
 
