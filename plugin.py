@@ -114,9 +114,8 @@ class TranscriptionPlugin:
             "language_code",
             type=parse_single_language_code,
             help=(
-                "Target language: E (English), C (Chinese), "
-                "S (Simplified Chinese), T (Traditional Chinese), "
-                "J (Japanese), K (Korean)"
+                "Target language: en (English), zh (Chinese), "
+                "jp (Japanese), kr (Korean)"
             ),
         )
         tr.add_argument(
@@ -181,9 +180,8 @@ class TranscriptionPlugin:
             "language_code",
             type=parse_single_language_code,
             help=(
-                "Language of the transcription: E (English), C (Chinese), "
-                "S (Simplified Chinese), T (Traditional Chinese), "
-                "J (Japanese), K (Korean)"
+                "Language of the transcription: en (English), zh (Chinese), "
+                "jp (Japanese), kr (Korean)"
             ),
         )
         review_input_group = rv.add_mutually_exclusive_group(required=False)
