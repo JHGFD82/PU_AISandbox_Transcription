@@ -12,7 +12,7 @@ This repo lives at `plugins/transcription/` inside the main PU_AISandbox repo. A
 ```text
 plugin.py                        ModePlugin entry point; also handles sys.modules injection
 settings.toml                    Default model parameters (temperature, top_p, max_tokens, frequency/presence penalty)
-prompts.template.toml            Template for prompt fragment overrides (copy → prompts.toml at main repo root)
+
 conftest.py                      Inserts main repo root into sys.path for pytest
 pytest.ini                       testpaths=tests, pythonpath=../..
 src/
@@ -68,10 +68,7 @@ Key constants:
 ### Prompt Specs (`ocr.py`, `transcription_review.py`)
 `OcrPromptSpec` and `TranscriptionReviewPromptSpec` are `@dataclass` classes. They accept flags matching the CLI options and expose `system_prompt()` / `user_prompt()` (and `refinement_prompt()` for OCR) methods that assemble the final strings from fragments.
 
-**When adding a new flag that affects prompts**: add a field to the relevant spec, add the fragment to `ocr_fragments.py`, wire it in the spec's `system_prompt()` / `user_prompt()`, and add the fragment key to `prompts.template.toml`.
-
-### `prompts.toml` overrides
-Users can drop a `prompts.toml` in the main repo root to override any fragment without editing source. The override contract (which keys map to which fragments) is defined in `ocr_fragments.py` and documented in `prompts.template.toml`. Do not remove or rename fragment constants without updating the template.
+**When adding a new flag that affects prompts**: add a field to the relevant spec, add the fragment to `ocr_fragments.py`, and wire it in the spec's `system_prompt()` / `user_prompt()`.
 
 ---
 
@@ -136,7 +133,7 @@ pytest -k "kanbun"                  # filter by keyword
 
 ## Common Patterns
 
-- **Adding a new transcribe flag**: add it in `register_subparsers`, validate in `run()`, add a field to `OcrPromptSpec`, add the fragment to `ocr_fragments.py`, update `prompts.template.toml`.
+- **Adding a new transcribe flag**: add it in `register_subparsers`, validate in `run()`, add a field to `OcrPromptSpec`, add the fragment to `ocr_fragments.py`.
 - **Adding a new language-specific script note**: add an entry to `OCR_SCRIPT_GUIDANCE` in `ocr_fragments.py` keyed by the exact language name string (e.g. `"Vietnamese"`); it is picked up automatically by `OcrPromptSpec._script_note()`.
 - **Adding a new kanbun mode**: add the fragment constants to `ocr_fragments.py`, add the flag to the kanbun mutually exclusive group in `register_subparsers`, add a field to `OcrPromptSpec`, wire in `_script_note()` and `system_prompt()` / `user_prompt()`.
 - **Never** import from `pu_plugin.transcription.settings` outside `src/` — use the constants exported from `src.settings` (which resolves to whichever copy is active via sys.modules).

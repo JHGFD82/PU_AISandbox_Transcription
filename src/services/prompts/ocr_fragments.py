@@ -7,8 +7,8 @@ Used by:
 All string content, no logic. Variables use str.format() placeholders.
 
 This file is the authoritative home for transcription-mode prompts and ships
-with PU_AISandbox_Transcription.  The override contract (prompts.toml sections
-[ocr], [transcription_review], [ocr_script_guidance]) is also defined here.
+with PU_AISandbox_Transcription.  To change prompt text, edit the constants
+directly and open a pull request.
 """
 
 # ---------------------------------------------------------------------------
@@ -310,51 +310,3 @@ TRANSCRIPTION_REVIEW_USER_BASE = (
 TRANSCRIPTION_REVIEW_TEXT_BLOCK = "\n\nTRANSCRIPTION:\n{text}"
 
 
-# ---------------------------------------------------------------------------
-# User override loader
-# ---------------------------------------------------------------------------
-
-def _load_user_overrides() -> None:
-    """Apply overrides from prompts.toml, if present.
-
-    Looks for prompts.toml at the repository root (four .parent calls from
-    this file's location: src/services/prompts/ocr_fragments.py).
-    """
-    import tomllib
-    from pathlib import Path
-
-    _toml_path = Path(__file__).parent.parent.parent.parent / "prompts.toml"
-    if not _toml_path.exists():
-        return
-
-    with _toml_path.open("rb") as _f:
-        _overrides = tomllib.load(_f)
-
-    _g = globals()
-
-    _MAP: dict[tuple[str, str], "str | tuple[str, str]"] = {
-        # ── [ocr] ─────────────────────────────────────────────────────────
-        ("ocr", "system_base"): "OCR_SYSTEM_BASE",
-        ("ocr", "rules"):       "OCR_RULES",
-        ("ocr", "user_base"):   "OCR_USER_BASE",
-        ("ocr", "user_rules"):  "OCR_USER_RULES",
-        # ── [transcription_review] ────────────────────────────────────────
-        ("transcription_review", "role"):     "TRANSCRIPTION_REVIEW_ROLE",
-        ("transcription_review", "approach"): "TRANSCRIPTION_REVIEW_APPROACH",
-    }
-
-    for (section, key), target in _MAP.items():
-        if section not in _overrides or key not in _overrides[section]:
-            continue
-        value = _overrides[section][key]
-        if isinstance(target, tuple):
-            dict_name, dict_key = target
-            _g[dict_name][dict_key] = value
-        else:
-            _g[target] = value
-
-    for lang, value in _overrides.get("ocr_script_guidance", {}).items():
-        _g["OCR_SCRIPT_GUIDANCE"][lang] = value
-
-
-_load_user_overrides()

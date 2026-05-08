@@ -41,16 +41,6 @@ max_tokens = 4000          # JSON output; increase for very long transcriptions
 
 The plugin searches upward from its own directory for the nearest `settings.toml` that contains `[ocr]` or `[transcription_review]`, so you can also edit the root-level `settings.toml` in the main repo.
 
-### `prompts.toml` (optional)
-
-Override the built-in prompt fragments without editing source code:
-
-```bash
-cp plugins/transcription/prompts.template.toml prompts.toml
-```
-
-Uncomment only the keys you want to change. `prompts.toml` is git-ignored in the main repo. See `prompts.template.toml` for all available keys and placeholders.
-
 ---
 
 ## Running Tests
