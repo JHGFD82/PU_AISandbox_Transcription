@@ -143,7 +143,7 @@ pytest -k "kanbun"                  # filter by keyword
 ## Relationship to Main Repo
 
 This plugin imports the following from the main repo at runtime (not available in this repo alone):
-- `src.cli`: `_add_common_flags`, `_add_notes_flags`
+- `src.cli`: `add_common_flags`, `add_notes_flags`
 - `src.config`: `parse_single_language_code`
 - `src.errors`: `CLIError`
 - `src.services.constants`: `DEFAULT_PARALLEL_WORKERS`
