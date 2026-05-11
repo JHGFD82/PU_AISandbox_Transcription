@@ -1,8 +1,16 @@
-"""PU_AISandbox Transcription plugin.
+"""PU_AISandbox Transcription EA plugin.
 
 Provides the ``transcribe`` command (OCR image transcription) and the
-``transcription_review`` command (OCR error review).
-Clone this repo into ``plugins/transcription/`` in the main PU_AISandbox repo.
+``transcription_review`` command (OCR error review) for East Asia languages
+(Chinese, Japanese, Korean) and English, with kanbun, vertical script,
+multi-pass, and parallel-worker support.
+
+Clone this repo into ``plugins/transcription-ea/`` in the main PU_AISandbox repo.
+
+This plugin extends and supersedes the built-in base transcription plugin
+(``plugins/transcription/``).  When both are loaded, EA registrations for
+``en``, ``zh``, ``jp``, and ``kr`` override the base plugin's English-only
+registration.
 
 ARCHITECTURE — sys.modules injection
 --------------------------------------
