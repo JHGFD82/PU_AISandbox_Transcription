@@ -1,21 +1,21 @@
-# Transcription Plugin
+# East Asia Transcription Plugin
 
-Provides the `transcribe` and `transcription_review` commands for the [PU AI Sandbox](https://github.com/princeton-oit/PU_AISandbox) platform. Supports OCR transcription of images and image folders, multi-pass refinement, and structured error-review of existing transcriptions.
+Extends the [PU AI Sandbox](https://github.com/princeton-oit/PU_AISandbox) `transcribe` and `transcription_review` commands with East Asian language support: Japanese, Chinese, and Korean — plus English with full kanbun, vertical script, multi-pass OCR, table preservation, and parallel-worker options.
+
+**Requires the base transcription plugin** (`plugins/transcription/`, which ships with the main repo) to be present. The base plugin owns the service layer and English OCR; this plugin adds EA language routing and EA-specific CLI flags.
 
 ---
 
 ## Installation
 
-This plugin must be cloned inside the main PU_AISandbox repository:
+Clone this repo into the `plugins/transcription-ea/` directory inside the main PU_AISandbox repo:
 
 ```bash
 # From the PU_AISandbox root:
-git clone <this-repo-url> plugins/transcription
+git clone https://github.com/JHGFD82/PU_AISandbox_Transcription_EA plugins/transcription-ea
 ```
 
-The plugin is discovered automatically at startup by `src/runtime/plugin_loader.py`. No changes to the main repo are needed.
-
-All dependencies are shared with the main repo's virtual environment — no separate install step is required.
+The plugin is discovered automatically at startup. No changes to the main repo are needed. Because plugin directories are loaded in alphabetical order, the base plugin (`transcription/`) always loads first and registers English before this plugin runs.
 
 ---
 
@@ -45,43 +45,38 @@ The plugin searches upward from its own directory for the nearest `settings.toml
 
 ## Running Tests
 
-Tests live in `tests/` and use the main repo's virtual environment. Run from this plugin's directory:
+Tests live in `tests/` and use the main repo's virtual environment. Run from the plugin directory:
 
 ```bash
 # Activate the main repo's venv first (if not already active):
 source ../../.venv/bin/activate        # macOS/Linux
-# ..\..\.venv\Scripts\activate         # Windows
 
 # Run all plugin tests:
-cd plugins/transcription
+cd plugins/transcription-ea
 pytest
 
 # Run a specific test file:
 pytest tests/test_transcription_cli.py
 
-# Run with verbose output:
+# Run with verbose output or a specific keyword:
 pytest -v
-
-# Run tests matching a keyword:
 pytest -k "kanbun"
 ```
 
-`pytest.ini` sets `testpaths = tests` and adds the main repo root to `sys.path` automatically via `pythonpath = ../..`, so `src.*` imports resolve without any extra setup.
+`conftest.py` adds the main repo root to `sys.path` automatically, so `src.*` imports resolve without extra setup.
 
 ---
 
 ## Language Codes
 
-Pass a single-character language code as the first positional argument:
+Pass a language code as the first positional argument:
 
 | Code | Language |
 |------|----------|
-| `E`  | English |
-| `C`  | Chinese (Classical / Traditional) |
-| `S`  | Simplified Chinese |
-| `T`  | Traditional Chinese |
-| `J`  | Japanese |
-| `K`  | Korean |
+| `en` | English |
+| `zh` | Chinese |
+| `jp` | Japanese |
+| `kr` | Korean |
 
 ---
 
@@ -96,34 +91,34 @@ python main.py <professor> transcription_review <language-code> [options]
 
 ```bash
 # Transcribe a single image:
-python main.py heller transcribe J -i scan.png
+python main.py heller transcribe jp -i scan.png
 
 # Transcribe with vertical text layout:
-python main.py heller transcribe J -i page.jpg --vertical
+python main.py heller transcribe jp -i page.jpg --vertical
 
 # Transcribe a two-page spread:
-python main.py heller transcribe C -i spread.jpg --spread
+python main.py heller transcribe zh -i spread.jpg --spread
 
 # Transcribe kanbun with kundoku annotations:
-python main.py heller transcribe J -i kanbun.jpg --kanbun
+python main.py heller transcribe jp -i kanbun.jpg --kanbun
 
 # Transcribe only the main-line kanji (omit okurigana, furigana, kaeriten):
-python main.py heller transcribe J -i kanbun.jpg --kanbun-main
+python main.py heller transcribe jp -i kanbun.jpg --kanbun-main
 
 # Multi-pass OCR (initial transcription + 2 refinement passes):
-python main.py heller transcribe J -i page.jpg -P 3
+python main.py heller transcribe jp -i page.jpg -P 3
 
 # Transcribe a folder of images in parallel:
-python main.py heller transcribe J -i pages/ -w 4
+python main.py heller transcribe jp -i pages/ -w 4
 
 # Dry run — print prompts without calling the API:
-python main.py heller transcribe J -i page.jpg --dry-run
+python main.py heller transcribe jp -i page.jpg --dry-run
 
 # Review an existing transcription for OCR errors (returns JSON report):
-python main.py heller transcription_review J -i transcription.txt
+python main.py heller transcription_review jp -i transcription.txt
 
 # Review pasted text interactively:
-python main.py heller transcription_review J -c
+python main.py heller transcription_review jp -c
 ```
 
 ---
