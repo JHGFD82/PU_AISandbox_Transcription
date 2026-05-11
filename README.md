@@ -19,6 +19,21 @@ The plugin is discovered automatically at startup. No changes to the main repo a
 
 ---
 
+## Dispatch Model
+
+When both plugins are installed, the EA plugin's registrations for `en`, `zh`, `jp`, and `kr` **override** the base plugin's English-only registration. The base plugin loads first, but the EA plugin supersedes it for all four language codes, adding kanbun, vertical-script, spread, multi-pass, and parallel-worker support for every language including English.
+
+| Language code | Handled by |
+|---|---|
+| `en` | This plugin (EA version — richer flag set than the base plugin) |
+| `zh` | This plugin |
+| `jp` | This plugin |
+| `kr` | This plugin |
+
+When the EA plugin is **not** installed, `en` falls back to the base plugin's simpler English-only transcription.
+
+---
+
 ## Configuration
 
 ### `settings.toml`
