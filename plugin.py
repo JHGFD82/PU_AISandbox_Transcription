@@ -2,15 +2,25 @@
 
 Provides the ``transcribe`` command (OCR image transcription) and the
 ``transcription_review`` command (OCR error review) for East Asia languages
-(Chinese, Japanese, Korean) and English, with kanbun, vertical script,
-multi-pass, and parallel-worker support.
+(Chinese, Japanese, Korean) with kanbun, vertical script, multi-pass, and
+parallel-worker support.
 
 Clone this repo into ``plugins/transcription-ea/`` in the main PU_AISandbox repo.
 
-This plugin extends and supersedes the built-in base transcription plugin
-(``plugins/transcription/``).  When both are loaded, EA registrations for
-``en``, ``zh``, ``jp``, and ``kr`` override the base plugin's English-only
-registration.
+ARCHITECTURE — DispatchPlugin pattern
+--------------------------------------
+This plugin declares ``handles = ['Chinese', 'Japanese', 'Korean']``.  When the
+base ``plugins/transcription/`` plugin (which handles ``['English']``) is also
+present, the plugin loader merges both into a ``DispatchPlugin`` per command.
+The DispatchPlugin calls ``register_subparsers()`` on the primary (base) plugin
+once to create the shared argparse subcommands, then calls
+``register_command_flags()`` on this (secondary) plugin to add the EA-specific
+flags.  ``run()`` is called only on the plugin whose ``handles`` list matches
+the requested language.
+
+If the base plugin is absent (unsupported but gracefully handled), this plugin
+falls back to ``register_subparsers()`` to create full standalone subcommands
+for all four languages.
 
 ARCHITECTURE — sys.modules injection
 --------------------------------------
@@ -116,118 +126,203 @@ class TranscriptionPlugin:
     """OCR transcription and transcription-review mode plugin."""
 
     commands: list[str] = ["transcribe", "transcription_review"]
-    supersedes: list[str] = ["transcription"]
+    # ``handles`` lists the full language names (as returned by
+    # ``parse_single_language_code``) that this plugin services.  The plugin
+    # loader uses this to merge with the base transcription plugin via
+    # DispatchPlugin, routing each language to the correct plugin.
+    handles: list[str] = ["Chinese", "Japanese", "Korean"]
 
     # ── Argument registration ─────────────────────────────────────────────────
+
+    def register_command_flags(self, parser: argparse.ArgumentParser) -> None:
+        """Add EA-specific flags to an existing subcommand parser.
+
+        Called by DispatchPlugin after the primary (base) plugin has registered
+        the subcommand and its shared flags.  Detects which subcommand owns
+        *parser* from the last word of ``parser.prog``.
+        """
+        command = parser.prog.rsplit(None, 1)[-1]
+        if command == "transcribe":
+            parser.add_argument(
+                "-v", "--vertical", dest="vertical", action="store_true",
+                help="Text is predominantly vertical (top-to-bottom, right-to-left columns)",
+            )
+            parser.add_argument(
+                "--spread", dest="spread", action="store_true",
+                help="Image is a two-page spread (two facing pages scanned together)",
+            )
+            ea_group = parser.add_argument_group("East Asia options")
+            kanbun_group = ea_group.add_mutually_exclusive_group()
+            kanbun_group.add_argument(
+                "--kanbun", dest="kanbun", action="store_true",
+                help="Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other "
+                     "kundoku annotations exactly as written",
+            )
+            kanbun_group.add_argument(
+                "--kanbun-main", dest="kanbun_main", action="store_true",
+                help="Image contains kanbun (漢文): transcribe ONLY the large main-line "
+                     "kanji; omit okurigana, furigana, kaeriten, and other small annotations",
+            )
+            parser.add_argument(
+                "-P", "--passes",
+                dest="passes",
+                type=int,
+                default=DEFAULT_OCR_PASSES,
+                metavar="N",
+                help="Number of OCR passes (default: 1). "
+                     "Passes > 1 send the image and prior transcription back to the "
+                     "model for review and correction.",
+            )
+            parser.add_argument(
+                "--preserve-tables", dest="preserve_tables", action="store_true",
+                help="Hint to the model that tabular data should be returned as Markdown "
+                     "tables; the output layer renders them as proper tables in PDF/DOCX "
+                     "or ASCII in TXT.",
+            )
+            parser.add_argument(
+                "-w", "--workers",
+                dest="workers",
+                type=int,
+                default=DEFAULT_PARALLEL_WORKERS,
+                metavar="N",
+                help=(
+                    "Number of parallel OCR workers when processing a folder of images "
+                    "(default: %(default)s). Ignored for single-image input. Multi-pass "
+                    "OCR within each image always runs sequentially."
+                ),
+            )
+        elif command == "transcription_review":
+            review_ea_group = parser.add_argument_group("East Asia options")
+            review_kanbun_group = review_ea_group.add_mutually_exclusive_group()
+            review_kanbun_group.add_argument(
+                "--kanbun", dest="kanbun", action="store_true",
+                help="Text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名)",
+            )
+            review_kanbun_group.add_argument(
+                "--kanbun-main", dest="kanbun_main", action="store_true",
+                help="Transcription was produced in main-character-only mode "
+                     "(okurigana, furigana, kaeriten were omitted intentionally — "
+                     "do not flag their absence as errors)",
+            )
 
     def register_subparsers(
         self,
         subparsers: argparse._SubParsersAction,
     ) -> None:
+        """Register standalone subcommands for all four languages.
+
+        Used only when this plugin loads without a DispatchPlugin (i.e. the
+        base transcription plugin is absent — an unsupported but gracefully
+        handled configuration).  In the normal two-plugin setup, DispatchPlugin
+        calls the base plugin's ``register_subparsers()`` then calls
+        ``register_command_flags()`` on this plugin instead.
+        """
         # ── transcribe ────────────────────────────────────────────────────────
-        tr = subparsers.add_parser("transcribe", help="Transcribe images using OCR")
-        tr.add_argument(
-            "language_code",
-            type=parse_single_language_code,
-            help=(
-                "Target language: en (English), zh (Chinese), "
-                "jp (Japanese), kr (Korean)"
-            ),
-        )
-        tr.add_argument(
-            "-i", "--input",
-            dest="input_file",
-            type=str,
-            required=False,
-            help="Input image file path, or a folder of images to process in order",
-        )
-        tr.add_argument("-v", "--vertical", dest="vertical", action="store_true",
-                        help="Text is predominantly vertical (top-to-bottom, right-to-left columns)")
-        tr.add_argument("--spread", dest="spread", action="store_true",
-                        help="Image is a two-page spread (two facing pages scanned together)")
-        ea_group = tr.add_argument_group("East Asia options")
-        kanbun_group = ea_group.add_mutually_exclusive_group()
-        kanbun_group.add_argument(
-            "--kanbun", dest="kanbun", action="store_true",
-            help="Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other "
-                 "kundoku annotations exactly as written",
-        )
-        kanbun_group.add_argument(
-            "--kanbun-main", dest="kanbun_main", action="store_true",
-            help="Image contains kanbun (漢文): transcribe ONLY the large main-line "
-                 "kanji; omit okurigana, furigana, kaeriten, and other small annotations",
-        )
-        tr.add_argument(
-            "-P", "--passes",
-            dest="passes",
-            type=int,
-            default=DEFAULT_OCR_PASSES,
-            metavar="N",
-            help="Number of OCR passes (default: 1). "
-                 "Passes > 1 send the image and prior transcription back to the "
-                 "model for review and correction.",
-        )
-        tr.add_argument(
-            "--preserve-tables", dest="preserve_tables", action="store_true",
-            help="Hint to the model that tabular data should be returned as Markdown "
-                 "tables; the output layer renders them as proper tables in PDF/DOCX "
-                 "or ASCII in TXT.",
-        )
-        tr.add_argument(
-            "-w", "--workers",
-            dest="workers",
-            type=int,
-            default=DEFAULT_PARALLEL_WORKERS,
-            metavar="N",
-            help=(
-                "Number of parallel OCR workers when processing a folder of images "
-                "(default: %(default)s). Ignored for single-image input. Multi-pass "
-                "OCR within each image always runs sequentially."
-            ),
-        )
-        add_common_flags(tr)
-        add_notes_flags(tr)
+        if "transcribe" not in subparsers.choices:
+            tr = subparsers.add_parser("transcribe", help="Transcribe images using OCR")
+            tr.add_argument(
+                "language_code",
+                type=parse_single_language_code,
+                help=(
+                    "Target language: en (English), zh (Chinese), "
+                    "jp (Japanese), kr (Korean)"
+                ),
+            )
+            tr.add_argument(
+                "-i", "--input",
+                dest="input_file",
+                type=str,
+                required=False,
+                help="Input image file path, or a folder of images to process in order",
+            )
+            tr.add_argument("-v", "--vertical", dest="vertical", action="store_true",
+                            help="Text is predominantly vertical (top-to-bottom, right-to-left columns)")
+            tr.add_argument("--spread", dest="spread", action="store_true",
+                            help="Image is a two-page spread (two facing pages scanned together)")
+            ea_group = tr.add_argument_group("East Asia options")
+            kanbun_group = ea_group.add_mutually_exclusive_group()
+            kanbun_group.add_argument(
+                "--kanbun", dest="kanbun", action="store_true",
+                help="Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other "
+                     "kundoku annotations exactly as written",
+            )
+            kanbun_group.add_argument(
+                "--kanbun-main", dest="kanbun_main", action="store_true",
+                help="Image contains kanbun (漢文): transcribe ONLY the large main-line "
+                     "kanji; omit okurigana, furigana, kaeriten, and other small annotations",
+            )
+            tr.add_argument(
+                "-P", "--passes",
+                dest="passes",
+                type=int,
+                default=DEFAULT_OCR_PASSES,
+                metavar="N",
+                help="Number of OCR passes (default: 1). "
+                     "Passes > 1 send the image and prior transcription back to the "
+                     "model for review and correction.",
+            )
+            tr.add_argument(
+                "--preserve-tables", dest="preserve_tables", action="store_true",
+                help="Hint to the model that tabular data should be returned as Markdown "
+                     "tables; the output layer renders them as proper tables in PDF/DOCX "
+                     "or ASCII in TXT.",
+            )
+            tr.add_argument(
+                "-w", "--workers",
+                dest="workers",
+                type=int,
+                default=DEFAULT_PARALLEL_WORKERS,
+                metavar="N",
+                help=(
+                    "Number of parallel OCR workers when processing a folder of images "
+                    "(default: %(default)s). Ignored for single-image input. Multi-pass "
+                    "OCR within each image always runs sequentially."
+                ),
+            )
+            add_common_flags(tr)
+            add_notes_flags(tr)
 
         # ── transcription_review ──────────────────────────────────────────────
-        rv = subparsers.add_parser(
-            "transcription_review",
-            help="Review AI transcription output for OCR errors (returns JSON report)",
-        )
-        rv.add_argument(
-            "language_code",
-            type=parse_single_language_code,
-            help=(
-                "Language of the transcription: en (English), zh (Chinese), "
-                "jp (Japanese), kr (Korean)"
-            ),
-        )
-        review_input_group = rv.add_mutually_exclusive_group(required=False)
-        review_input_group.add_argument(
-            "-i", "--input",
-            dest="input_file",
-            type=str,
-            help="Path to a text file containing the transcription result to review",
-        )
-        review_input_group.add_argument(
-            "-c", "--custom",
-            dest="custom_text",
-            action="store_true",
-            help="Paste the transcription text interactively (end with --- on its own line)",
-        )
-        review_ea_group = rv.add_argument_group("East Asia options")
-        review_kanbun_group = review_ea_group.add_mutually_exclusive_group()
-        review_kanbun_group.add_argument(
-            "--kanbun", dest="kanbun", action="store_true",
-            help="Text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名)",
-        )
-        review_kanbun_group.add_argument(
-            "--kanbun-main", dest="kanbun_main", action="store_true",
-            help="Transcription was produced in main-character-only mode "
-                 "(okurigana, furigana, kaeriten were omitted intentionally — "
-                 "do not flag their absence as errors)",
-        )
-        add_common_flags(rv)
-        add_notes_flags(rv)
+        if "transcription_review" not in subparsers.choices:
+            rv = subparsers.add_parser(
+                "transcription_review",
+                help="Review AI transcription output for OCR errors (returns JSON report)",
+            )
+            rv.add_argument(
+                "language_code",
+                type=parse_single_language_code,
+                help=(
+                    "Language of the transcription: en (English), zh (Chinese), "
+                    "jp (Japanese), kr (Korean)"
+                ),
+            )
+            review_input_group = rv.add_mutually_exclusive_group(required=False)
+            review_input_group.add_argument(
+                "-i", "--input",
+                dest="input_file",
+                type=str,
+                help="Path to a text file containing the transcription result to review",
+            )
+            review_input_group.add_argument(
+                "-c", "--custom",
+                dest="custom_text",
+                action="store_true",
+                help="Paste the transcription text interactively (end with --- on its own line)",
+            )
+            review_ea_group = rv.add_argument_group("East Asia options")
+            review_kanbun_group = review_ea_group.add_mutually_exclusive_group()
+            review_kanbun_group.add_argument(
+                "--kanbun", dest="kanbun", action="store_true",
+                help="Text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名)",
+            )
+            review_kanbun_group.add_argument(
+                "--kanbun-main", dest="kanbun_main", action="store_true",
+                help="Transcription was produced in main-character-only mode "
+                     "(okurigana, furigana, kaeriten were omitted intentionally — "
+                     "do not flag their absence as errors)",
+            )
+            add_common_flags(rv)
+            add_notes_flags(rv)
 
     # ── Command execution ─────────────────────────────────────────────────────
 
