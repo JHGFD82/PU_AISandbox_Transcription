@@ -116,6 +116,7 @@ class TranscriptionPlugin:
     """OCR transcription and transcription-review mode plugin."""
 
     commands: list[str] = ["transcribe", "transcription_review"]
+    supersedes: list[str] = ["transcription"]
 
     # ── Argument registration ─────────────────────────────────────────────────
 
