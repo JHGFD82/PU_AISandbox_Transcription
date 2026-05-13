@@ -10,7 +10,6 @@ import pytest
 
 from src.cli import create_argument_parser
 from src.runtime.plugin_loader import load_plugins
-from src.errors import CLIError
 
 _PLUGINS_DIR = Path(__file__).resolve().parents[2]
 

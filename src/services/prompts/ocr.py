@@ -1,6 +1,6 @@
 """Prompt spec for OCR (transcription) operations."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from . import ocr_fragments as F
