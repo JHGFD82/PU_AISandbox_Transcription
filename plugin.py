@@ -144,7 +144,8 @@ class TranscriptionPlugin:
                         help="Text is predominantly vertical (top-to-bottom, right-to-left columns)")
         tr.add_argument("--spread", dest="spread", action="store_true",
                         help="Image is a two-page spread (two facing pages scanned together)")
-        kanbun_group = tr.add_mutually_exclusive_group()
+        ea_group = tr.add_argument_group("East Asia options")
+        kanbun_group = ea_group.add_mutually_exclusive_group()
         kanbun_group.add_argument(
             "--kanbun", dest="kanbun", action="store_true",
             help="Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other "
@@ -212,7 +213,8 @@ class TranscriptionPlugin:
             action="store_true",
             help="Paste the transcription text interactively (end with --- on its own line)",
         )
-        review_kanbun_group = rv.add_mutually_exclusive_group()
+        review_ea_group = rv.add_argument_group("East Asia options")
+        review_kanbun_group = review_ea_group.add_mutually_exclusive_group()
         review_kanbun_group.add_argument(
             "--kanbun", dest="kanbun", action="store_true",
             help="Text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名)",
